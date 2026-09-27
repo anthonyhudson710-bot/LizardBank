@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8" standalone="no"?>
+<GUI onOpen="onOpen" onClose="onClose">
+    <Bitmap profile="dialogFullscreenBg" />
+    <GuiElement profile="fs25_dialogBg" size="1450px 850px">
+        <ThreePartBitmap profile="fs25_dialogBgMiddle" />
+        <ThreePartBitmap profile="fs25_dialogBgTop" />
+        <ThreePartBitmap profile="fs25_dialogBgBottom" />
+        <Text profile="lb_heading" position="65px -35px" size="1320px 55px" text="$l10n_lb_title" />
+        <Text profile="lb_subheading" position="65px -92px" size="1320px 32px" text="$l10n_lb_subtitle" />
+        <Text profile="lb_section" id="pageTitle" position="65px -153px" size="1320px 45px" />
+        <Text profile="lb_report" id="reportText" position="65px -216px" size="1320px 470px" />
+        <Text profile="lb_subheading" id="pageNumber" position="65px -709px" size="1320px 32px" />
+        <BoxLayout profile="fs25_dialogButtonBox" size="1320px 60px">
+            <Button profile="buttonBack" id="backButton" focusId="lb_back" handleFocus="true" text="$l10n_lb_back" onClick="onClickBack" />
+            <Button profile="buttonOK" id="previousButton" focusId="lb_previous" handleFocus="true" text="$l10n_lb_previous" inputAction="MENU_PAGE_PREV" onClick="onClickPrevious" />
+            <Button profile="buttonOK" id="nextButton" focusId="lb_next" handleFocus="true" text="$l10n_lb_next" inputAction="MENU_PAGE_NEXT" onClick="onClickNext" />
+            <Button profile="buttonOK" id="refreshButton" focusId="lb_refresh" handleFocus="true" text="$l10n_lb_refresh" inputAction="MENU_EXTRA_1" onClick="onClickRefresh" />
+        </BoxLayout>
+    </GuiElement>
+</GUI>

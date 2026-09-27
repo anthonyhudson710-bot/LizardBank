@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8" standalone="no"?>
+<modDesc descVersion="93">
+    <author>Lizard Bank</author>
+    <version>0.0.1</version>
+    <title><en>Lizard Bank</en></title>
+    <description>
+        <en><![CDATA[A financial snapshot of your farm: cash, native debt, owned land and equipment.
+Single-player preview. Open with Right Ctrl+B (remappable in Controls).
+Values cover only the listed assets; this preview does not calculate a credit grade or change your finances.]]></en>
+    </description>
+    <iconFilename>assets/icon.dds</iconFilename>
+    <multiplayer supported="false"/>
+    <l10n filenamePrefix="l10n/l10n"/>
+    <extraSourceFiles>
+        <sourceFile filename="scripts/BankDataSource.lua"/>
+        <sourceFile filename="scripts/BankReport.lua"/>
+        <sourceFile filename="scripts/BankScreen.lua"/>
+        <sourceFile filename="scripts/LizardBank.lua"/>
+    </extraSourceFiles>
+    <actions>
+        <action name="LIZARDBANK_OPEN" category="BASE" axisType="HALF"/>
+    </actions>
+    <inputBinding>
+        <actionBinding action="LIZARDBANK_OPEN">
+            <binding device="KB_MOUSE_DEFAULT" input="KEY_rctrl KEY_b"/>
+        </actionBinding>
+    </inputBinding>
+</modDesc>

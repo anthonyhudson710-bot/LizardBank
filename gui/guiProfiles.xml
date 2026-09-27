@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8" standalone="no"?>
+<GUIProfiles>
+    <Profile name="lb_heading" extends="baseReference" with="anchorTopLeft pivotTopLeft">
+        <textColor value="1 1 1 1" />
+        <textSize value="40px" />
+        <textBold value="true" />
+        <textAlignment value="left" />
+        <textVerticalAlignment value="middle" />
+        <textLayoutMode value="resize" />
+    </Profile>
+    <Profile name="lb_subheading" extends="lb_heading">
+        <textSize value="20px" />
+        <textBold value="false" />
+        <textColor value="0.8 0.85 0.8 1" />
+    </Profile>
+    <Profile name="lb_section" extends="lb_heading">
+        <textSize value="28px" />
+    </Profile>
+    <Profile name="lb_report" extends="lb_heading">
+        <textSize value="24px" />
+        <textBold value="false" />
+        <textVerticalAlignment value="top" />
+        <textMaxNumLines value="14" />
+        <textLineHeightScale value="1.25" />
+    </Profile>
+</GUIProfiles>

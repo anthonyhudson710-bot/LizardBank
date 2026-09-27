@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="utf-8" standalone="no"?>
+<l10n>
+    <texts>
+        <text name="input_LIZARDBANK_OPEN" text="Open Lizard Bank" />
+        <text name="lb_title" text="Lizard Bank" />
+        <text name="lb_subtitle" text="Farm financial snapshot | Partial coverage" />
+        <text name="lb_summary" text="Financial summary" />
+        <text name="lb_farmland" text="Owned farmland" />
+        <text name="lb_equipment" text="Equipment and implements" />
+        <text name="lb_basis" text="How to read this report" />
+        <text name="lb_issues" text="Coverage issues" />
+        <text name="lb_unavailable" text="Unavailable" />
+        <text name="lb_none" text="None" />
+        <text name="lb_farm" text="Farm: %s (ID %s)" />
+        <text name="lb_date" text="Game year %s | Period %s | Game day %s | %s" />
+        <text name="lb_cash" text="Cash: %s" />
+        <text name="lb_debt" text="Native loan balance: %s" />
+        <text name="lb_landValue" text="Known farmland value: %s" />
+        <text name="lb_equipmentValue" text="Known owned-equipment sale quotes: %s" />
+        <text name="lb_partialAssets" text="Known covered assets, including cash (partial): %s" />
+        <text name="lb_area" text="Known parcel area: %s" />
+        <text name="lb_landCount" text="Owned parcels recorded: %s" />
+        <text name="lb_equipmentCounts" text="Owned: %s | Leased: %s | Borrowed: %s" />
+        <text name="lb_unknownLand" text="Unvalued parcels: %s | Parcels with unknown area: %s" />
+        <text name="lb_unknownEquipment" text="Unvalued owned equipment: %s | Other excluded equipment: %s" />
+        <text name="lb_partialWarning" text="Partial coverage: this is not net worth or a credit assessment." />
+        <text name="lb_landItem" text="Parcel %s: %s" />
+        <text name="lb_landDetail" text="Area: %s | Game price: %s" />
+        <text name="lb_vehicleItem" text="%s | %s" />
+        <text name="lb_vehicleDetail" text="Game sale quote: %s" />
+        <text name="lb_vehicleExcluded" text="Excluded from owned-equipment value." />
+        <text name="lb_quoteContents" text="Quote may include contents or animals; inventory is not added separately." />
+        <text name="lb_quoteContentsIncluded" text="As-is quote; any bundled contents are included." />
+        <text name="lb_owned" text="Owned" />
+        <text name="lb_leased" text="Leased" />
+        <text name="lb_borrowed" text="Borrowed" />
+        <text name="lb_unknown" text="Ownership unavailable" />
+        <text name="lb_noLand" text="No owned farmland found." />
+        <text name="lb_noEquipment" text="No equipment associated with this farm found." />
+        <text name="lb_landUnavailable" text="Farmland coverage is unavailable or incomplete. Zero must not be assumed." />
+        <text name="lb_equipmentUnavailable" text="Equipment coverage is unavailable or incomplete. Zero must not be assumed." />
+        <text name="lb_noIssues" text="No collection issues detected within this build's limited coverage." />
+        <text name="lb_basisCash" text="Cash and native debt are the current active farm balances." />
+        <text name="lb_basisLand" text="Land uses current game-configured parcel prices and total parcel area." />
+        <text name="lb_basisVehicle" text="Equipment uses the game's current sale quote, including specialization changes." />
+        <text name="lb_basisQuote" text="Sale location, condition changes and other mods may change the final proceeds." />
+        <text name="lb_basisExclusions" text="Leased, borrowed and unidentified ownership are excluded from owned assets." />
+        <text name="lb_basisMissing" text="Not separately valued: buildings, inventories, animals, crops and timber." />
+        <text name="lb_basisDebt" text="External financing and other liabilities are not included in native debt." />
+        <text name="lb_basisSubtotal" text="Known covered assets sum available cash, land and owned-equipment values." />
+        <text name="lb_basisUnknown" text="Unavailable values are omitted from subtotals; a verified zero is shown as zero." />
+        <text name="lb_basisRefresh" text="This is a dated snapshot. Refresh to read changes made since it was captured." />
+        <text name="lb_basisNoGrade" text="No financial history, payment forecast or credit grade is produced in this build." />
+        <text name="lb_error" text="The report could not be refreshed. Close and reopen it, then check log.txt." />
+        <text name="lb_page" text="Page %d / %d" />
+        <text name="lb_refresh" text="Refresh" />
+        <text name="lb_previous" text="Previous" />
+        <text name="lb_next" text="Next" />
+        <text name="lb_back" text="Back" />
+    </texts>
+</l10n>

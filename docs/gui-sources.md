@@ -1,0 +1,18 @@
+# GUI integration evidence
+
+Documentation reviewed against GIANTS FS25 script v1.20.0.0. These are implementation references, not evidence of an in-game pass. The Windows test checklist remains required.
+
+- [ScreenElement](https://gdn.giants-software.com/documentation_scripting_fs25.php?category=43&class=484&version=script): `new(nil, customMt)`, base `onOpen` and `onClose`, and menu action dispatch. Base callbacks capture/restore the mouse cursor. Lizard Bank has no custom input context.
+- [Gui](https://gdn.giants-software.com/documentation_scripting_fs25.php?category=43&class=436&version=script): `loadProfiles`, `loadGui`, `showGui`, `changeScreen` and menu input context management. FS25 XML uses element names such as `Text`, `Button`, `BoxLayout` and `GuiElement`. `loadGui` exposes IDs and assigns screen callbacks before use. The documented API has no `unloadGui` method.
+- [FrameElement](https://gdn.giants-software.com/documentation_scripting_fs25.php?category=43&class=433&version=script): `exposeControlsAsFields` maps XML IDs automatically; the old FS22 `registerControls` pattern is unnecessary. `changeScreen(nil)` closes through GIANTS' GUI controller.
+- [ButtonElement](https://gdn.giants-software.com/documentation_scripting_fs25.php?category=43&class=424&version=script): XML `onClick` and `inputAction` provide native mouse/menu/controller action dispatch and glyphs.
+- [FocusManager](https://gdn.giants-software.com/documentation_scripting_fs25.php?category=43&class=432&version=script): explicit directional links and focus IDs connect the four buttons. Deleting a GUI removes its focus elements; its `guiFocusData` must remain present until deletion finishes.
+- [TextElement](https://gdn.giants-software.com/documentation_scripting_fs25.php?category=43&class=497&version=script): `setText`, multiline layout and mod environment resolution for XML translations.
+- [AdditionalFieldBuyInfo](https://gdn.giants-software.com/documentation_scripting_fs25.php?category=1&class=2&version=script): base-game formatting uses `g_i18n:formatMoney(value, 0, true, false)` and `g_i18n:formatArea(hectares, 2)`.
+- [Production Manager GUI definition](https://github.com/NXModdingFS/FS25_ProductionManager/blob/main/gui/ProductionDlgFrame.xml) and [profiles](https://github.com/NXModdingFS/FS25_ProductionManager/blob/main/gui/guiProfiles.xml): checked native FS25 profile identifiers, element syntax and profile inheritance. No third-party source or assets are bundled.
+
+The GUI uses native dialog background/button profiles inside a standalone `ScreenElement`. The report is paged and built only on opening or Refresh; navigation does not scan assets. Each page has at most 14 bounded text lines. Boundaries leave navigation controls focusable, avoiding a focused button becoming unavailable when advancing to the first or last page.
+
+The owning mod constructs `BankScreen.new(owner)`, loads profiles before the GUI, and provides `owner:captureSnapshot()`. English translations load through `<l10n filenamePrefix="l10n/l10n"/>`; dynamic translations pass the captured mod environment to `g_i18n:getText`.
+
+Disposal closes the active bank screen, deletes its controller and children, then clears only its owned entries in `guis`, `nameScreenTypes`, `screens`, `screenControllers` and `FocusManager.guiFocusData`. It must not call a nonexistent `unloadGui` or remove focus data before element deletion.

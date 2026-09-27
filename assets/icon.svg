@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <title>Lizard Bank — original geometric bank emblem</title>
+  <rect x="0" y="0" width="512" height="512" fill="#112B25"/>
+  <rect x="24" y="24" width="464" height="464" fill="#28483A"/>
+  <rect x="32" y="32" width="448" height="448" fill="#112B25"/>
+  <polygon points="256,94 414,186 98,186" fill="#D9B96D"/>
+  <rect x="104" y="200" width="304" height="20" fill="#ECE6D5"/>
+  <rect x="122" y="238" width="42" height="130" fill="#ECE6D5"/>
+  <rect x="235" y="238" width="42" height="130" fill="#ECE6D5"/>
+  <rect x="348" y="238" width="42" height="130" fill="#ECE6D5"/>
+  <rect x="104" y="386" width="304" height="18" fill="#D9B96D"/>
+  <rect x="88" y="420" width="336" height="18" fill="#D9B96D"/>
+</svg>
