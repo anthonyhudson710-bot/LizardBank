@@ -1,10 +1,12 @@
 # Windows test: 0.0.5
 
-**Version 0.0.5 runtime status: pending.** The user reported success through 0.0.4
-on 2026-09-27. The first supplied log identifies FS25 1.23.1.0; the second shows
-Arkansas 4X without new problem categories in its comparison view. Those overall
-confirmations did not retain individual test-case results and do not validate
-the new history, persistence, forecasting, or score pipeline.
+**Version 0.0.5 runtime status: user-reported success.** Overall confirmation was
+received on 2026-09-27 after the full pipeline build was delivered. Individual
+rows below remain unreported regression checks; they are not individually marked
+passed by that confirmation. The first supplied log identifies FS25 1.23.1.0;
+the second shows Arkansas 4X without new problem categories in its comparison
+view. No additional v0.0.5 diagnostic snapshot or seasonal-cycle results were
+supplied with the latest confirmation.
 
 Local tests exercise explicit engine stubs. They cannot verify native callback
 timing, retained-finance layouts, save-directory promotion, or controller focus.

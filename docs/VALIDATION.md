@@ -10,7 +10,7 @@ Version: **0.0.5**. Checked on **2026-09-27** in the macOS development workspace
 | Mod icon | Passed | 512 x 512 DXT5 DDS with all ten mipmap levels |
 | Packaged ZIP | Passed | Archive integrity, root modDesc.xml and allowlisted runtime files |
 | GIANTS TestRunner | Pending | Tool is not installed in this workspace |
-| Windows FS25 0.0.5 | Pending | No Windows run of this version has been observed; native Finance records, lifecycle timing, sidecar promotion, period boundaries and the new Policy button require verification |
+| Windows FS25 0.0.5 | User-reported success | Overall confirmation received on 2026-09-27; individual Finance, persistence, seasonal-cycle and scoring results were not supplied |
 | Windows FS25 through 0.0.4 | User-reported success | Earlier overall confirmations; individual checklist results were not supplied |
 
 Tests use an isolated Lua 5.1.5 executable built from the official source archive. Its SHA-256 was checked against the [Lua download page](https://www.lua.org/ftp/). The interpreter is not shipped inside the mod.
@@ -42,3 +42,10 @@ The user also confirmed **v0.0.2 successful** on 2026-09-27. The supplied second
 After the v0.0.3 package was announced, the user said "succes next". This was treated as overall confirmation of that build, with the interpretation stated to the user. No additional log or individual case results were provided. Its local suite passed 88 tests.
 
 The user explicitly confirmed **v0.0.4 successful** with "success now what" on 2026-09-27. No new diagnostic log or individual checklist results accompanied this confirmation. [WINDOWS_TEST.md](WINDOWS_TEST.md) retains the scenarios for regression testing; unreported cases are not individually marked passed.
+
+The user explicitly confirmed **v0.0.5 successful** with "success now what" on
+2026-09-27 after receiving the full financial-history, tracking, seasonal-scenario
+and creditworthiness build. This records overall runtime acceptance. No new
+diagnostic snapshot or individual test results accompanied the confirmation, so
+it does not independently establish the native retained-history window, exact
+save/load hook timing, or completion of the twelve-period eligibility test.
