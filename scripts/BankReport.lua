@@ -103,7 +103,7 @@ BankReport.ENGLISH = {
     lb_basisSubtotal = "Known covered assets sum available cash, land, owned equipment and buildings.",
     lb_basisUnknown = "Unavailable values are omitted from subtotals; a verified zero is shown as zero.",
     lb_basisRefresh = "This is a dated snapshot. Refresh to read changes made since it was captured.",
-    lb_basisNoGrade = "No financial history, payment forecast or credit grade is produced in this build.",
+    lb_basisNoGrade = "Creditworthiness uses observed cash history with explicit evidence gates; no loans are issued.",
     lb_error = "The report could not be refreshed. Close and reopen it, then check log.txt.",
     lb_page = "Page %d / %d",
     lb_refresh = "Refresh",
@@ -111,6 +111,7 @@ BankReport.ENGLISH = {
     lb_next = "Next",
     lb_back = "Back"
 }
+for key, value in pairs(BankFinancialReport.ENGLISH) do BankReport.ENGLISH[key] = value end
 
 local function isNumber(value)
     return type(value) == "number" and value == value and value > -math.huge and value < math.huge
@@ -276,6 +277,8 @@ function BankReport.buildPages(snapshot, i18n, customEnvironment)
         "",
         t("lb_partialWarning")
     })
+
+    for _, entry in ipairs(BankFinancialReport.sections(snapshot, t, money, known)) do section(entry.title, entry.lines) end
 
     local landKnown = land.status == "available" or land.status == "partial"
     local equipmentKnown = equipment.status == "available" or equipment.status == "partial"

@@ -3,6 +3,7 @@ dofile("scripts/BankPropertyDataSource.lua")
 dofile("scripts/BankAnimalDataSource.lua")
 dofile("scripts/BankStoredObjectDataSource.lua")
 dofile("scripts/BankInventoryDataSource.lua")
+dofile("scripts/BankFinanceDataSource.lua")
 dofile("scripts/BankDataSource.lua")
 
 local count = 0
@@ -269,7 +270,7 @@ test("capture integrates buildings and quantities and isolates a failed added se
     context.g_currentMission.placeableSystem = {placeables = {silo}}
     context.g_fillTypeManager = {getFillTypeByIndex = function() return {name = "WHEAT", title = "Wheat"} end}
     local snapshot = BankDataSource.capture(context)
-    equal(snapshot.schemaVersion, 3)
+    equal(snapshot.schemaVersion, 4)
     equal(snapshot.buildings.totalValue, 300)
     equal(snapshot.inventory.items[1].quantity, 500)
     equal(snapshot.inventory.items[1].location, "Farm silo")

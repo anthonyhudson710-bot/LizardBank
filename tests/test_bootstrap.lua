@@ -214,3 +214,45 @@ test("failed GUI setup restores previous focus and avoids frame retries", functi
     assertEqual(state.deletes, 1)
     assertContains(bank:consoleSnapshot(), "log.txt")
 end)
+
+test("load completion initializes history before first clock update and preserves native returns", function()
+    local bank, env = fixture()
+    local observed, deleted, starts = nil, 0, 0
+    env.g_currentMission.environment = {dayTime = 1000}
+    local original = function(_, marker) return nil, marker, 77 end
+    env.Mission00 = {loadMission00Finished = original}
+    env.BankHistoryRuntime = {new = function(mission)
+        local runtime = {capabilities = {}, start = function() observed = mission.environment.dayTime; starts = starts + 1 end,
+            update = function() end, delete = function() deleted = deleted + 1 end}
+        function runtime:safe(method) return method(self) end
+        return runtime
+    end}
+    bank:loadMap()
+    bank:update(0)
+    assertEqual(starts, 0)
+    local a, b, c = env.Mission00.loadMission00Finished(env.g_currentMission, "native")
+    assertEqual(a, nil); assertEqual(b, "native"); assertEqual(c, 77)
+    assertEqual(observed, 1000)
+    assertEqual(bank.historyRuntime.capabilities.startTiming, "load_complete_candidate")
+    env.g_currentMission.environment.dayTime = 1016
+    bank:update(16)
+    assertEqual(starts, 1)
+    bank:deleteMap()
+    assertEqual(deleted, 1)
+    assertEqual(env.Mission00.loadMission00Finished, original)
+end)
+
+test("later loading wrappers survive unload and cannot resurrect the bank observer", function()
+    local bank, env = fixture()
+    local nativeCalls = 0
+    env.Mission00 = {loadMission00Finished = function() nativeCalls = nativeCalls + 1 end}
+    bank:loadMap()
+    local ours = env.Mission00.loadMission00Finished
+    local foreign = function(...) return ours(...) end
+    env.Mission00.loadMission00Finished = foreign
+    bank:deleteMap()
+    foreign(env.g_currentMission)
+    assertEqual(nativeCalls, 1)
+    assertEqual(bank.historyRuntime, nil)
+    assertEqual(env.Mission00.loadMission00Finished, foreign)
+end)

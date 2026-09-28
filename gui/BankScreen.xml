@@ -15,6 +15,7 @@
             <Button profile="buttonOK" id="previousButton" focusId="lb_previous" handleFocus="true" text="$l10n_lb_previous" inputAction="MENU_PAGE_PREV" onClick="onClickPrevious" />
             <Button profile="buttonOK" id="nextButton" focusId="lb_next" handleFocus="true" text="$l10n_lb_next" inputAction="MENU_PAGE_NEXT" onClick="onClickNext" />
             <Button profile="buttonOK" id="refreshButton" focusId="lb_refresh" handleFocus="true" text="$l10n_lb_refresh" inputAction="MENU_EXTRA_1" onClick="onClickRefresh" />
+            <Button profile="buttonOK" id="policyButton" focusId="lb_policy" handleFocus="true" text="$l10n_lb_policy" inputAction="MENU_EXTRA_2" onClick="onClickPolicy" />
         </BoxLayout>
     </GuiElement>
 </GUI>

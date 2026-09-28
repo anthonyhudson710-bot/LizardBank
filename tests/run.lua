@@ -34,7 +34,7 @@ function assertFalse(value, message)
     assert(value == false, message or "Expected false")
 end
 
-local suites = {"tests/test_data.lua", "tests/test_property.lua", "tests/test_inventory.lua", "tests/test_stored_objects.lua", "tests/test_animals.lua", "tests/test_report.lua", "tests/test_bootstrap.lua"}
+local suites = {"tests/test_data.lua", "tests/test_property.lua", "tests/test_inventory.lua", "tests/test_stored_objects.lua", "tests/test_animals.lua", "tests/test_finance.lua", "tests/test_underwriting.lua", "tests/test_history.lua", "tests/test_history_runtime.lua", "tests/test_report.lua", "tests/test_bootstrap.lua"}
 for _, path in ipairs(suites) do
     local file = io.open(path, "r")
     if file ~= nil then

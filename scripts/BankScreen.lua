@@ -13,7 +13,7 @@ end
 
 function BankScreen:onGuiSetupFinished()
     BankScreen:superClass().onGuiSetupFinished(self)
-    local buttons = {self.backButton, self.previousButton, self.nextButton, self.refreshButton}
+    local buttons = {self.backButton, self.previousButton, self.nextButton, self.refreshButton, self.policyButton}
     for index, button in ipairs(buttons) do
         FocusManager:linkElements(button, FocusManager.LEFT, buttons[(index - 2) % #buttons + 1])
         FocusManager:linkElements(button, FocusManager.RIGHT, buttons[index % #buttons + 1])
@@ -43,7 +43,13 @@ end
 function BankScreen:onClickRefresh()
     if self.owner == nil then return true end
     local ok, result = pcall(function()
-        return BankReport.buildPages(self.owner:captureSnapshot(), g_i18n, MOD_NAME)
+        local snapshot = self.owner:captureSnapshot()
+        if self.policyButton ~= nil then
+            local mode = snapshot.history and snapshot.history.mode or "standard"
+            self.policyButton:setText(BankReport.getText(g_i18n, "lb_policyButton", MOD_NAME,
+                BankReport.getText(g_i18n, "lb_mode_" .. mode, MOD_NAME)))
+        end
+        return BankReport.buildPages(snapshot, g_i18n, MOD_NAME)
     end)
     if ok then
         self.pages = result
@@ -56,6 +62,11 @@ function BankScreen:onClickRefresh()
     self.pageIndex = math.max(1, math.min(self.pageIndex, #self.pages))
     self:showPage()
     return true
+end
+
+function BankScreen:onClickPolicy()
+    if self.owner ~= nil and type(self.owner.cyclePolicy) == "function" then self.owner:cyclePolicy() end
+    return self:onClickRefresh()
 end
 
 function BankScreen:showPage()

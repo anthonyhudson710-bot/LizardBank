@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="utf-8" standalone="no"?>
 <modDesc descVersion="93">
     <author>Lizard Bank</author>
-    <version>0.0.4</version>
+    <version>0.0.5</version>
     <title><en>Lizard Bank</en></title>
     <description>
-        <en><![CDATA[A financial snapshot of your farm: cash, native debt, owned land, equipment, buildings, stored-goods quantities and livestock.
+        <en><![CDATA[Farm assets, retained financial records, ongoing history, seasonal cash scenarios and explainable creditworthiness.
 Single-player preview. Open with Right Ctrl+B (remappable in Controls).
-Values cover only the listed assets; this preview does not calculate a credit grade or change your finances.]]></en>
+Assessments require sufficient observed history. Partial native-data coverage; no loans or economic changes.]]></en>
     </description>
     <iconFilename>assets/icon.dds</iconFilename>
     <multiplayer supported="false"/>
@@ -16,7 +16,13 @@ Values cover only the listed assets; this preview does not calculate a credit gr
         <sourceFile filename="scripts/BankAnimalDataSource.lua"/>
         <sourceFile filename="scripts/BankStoredObjectDataSource.lua"/>
         <sourceFile filename="scripts/BankInventoryDataSource.lua"/>
+        <sourceFile filename="scripts/BankFinanceDataSource.lua"/>
         <sourceFile filename="scripts/BankDataSource.lua"/>
+        <sourceFile filename="scripts/BankHistory.lua"/>
+        <sourceFile filename="scripts/BankHistoryStore.lua"/>
+        <sourceFile filename="scripts/BankHistoryRuntime.lua"/>
+        <sourceFile filename="scripts/BankUnderwriting.lua"/>
+        <sourceFile filename="scripts/BankFinancialReport.lua"/>
         <sourceFile filename="scripts/BankReport.lua"/>
         <sourceFile filename="scripts/BankScreen.lua"/>
         <sourceFile filename="scripts/LizardBank.lua"/>

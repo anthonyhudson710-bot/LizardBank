@@ -1,20 +1,26 @@
-# Lizard Bank 0.0.4
+# Lizard Bank 0.0.5
 
-A single-player FS25 financial snapshot. The bank shows current cash, the native loan balance, owned farmland, equipment, building monetary values, stored-goods quantities, and livestock, with itemized coverage explanations.
+A single-player FS25 farm financial report with retained game records, ongoing cash-flow history, seasonal cash scenarios and an explainable creditworthiness model. Asset coverage includes cash, native debt, owned farmland, equipment, buildings, stored-goods quantities and livestock.
 
-Earlier builds have user-reported success through v0.0.3. This update adds livestock coverage, which needs Windows verification. It does not change finances, create loans, calculate a credit grade, or write additional savegame data.
+Earlier builds have user-reported success through v0.0.4. **This release needs Windows verification.** It observes money movements and writes its own history alongside the normal game save. It does not change money, debt or ownership, or issue loans.
+
+**A new save—and an established save without a verified observed cycle—shows insufficient history.** Native retained records are displayed when readable, but their FS25 dates, padding, ordering and retention window remain unverified. The mod does not turn those unknown slots into invented completed months or an immediate score.
 
 ## Install and open
 
 1. Copy **`dist/FS25_LizardBank.zip`** into your FS25 mods folder, normally `Documents\My Games\FarmingSimulator2025\mods`. Keep the ZIP intact and avoid duplicate unpacked copies.
 2. Activate **Lizard Bank** when loading a disposable new save or a copy of an existing single-player save.
 3. In gameplay, press **Right Ctrl+B**. The **Open Lizard Bank** action can be reassigned in Controls, including to a controller button. Close other menus first.
-4. Use **Previous**, **Next**, **Refresh**, and **Back**. Keyboard/controller menu actions and mouse buttons use the native GUI. Refresh captures current values; leaving the window open does not continuously rescan your farm.
+4. Use **Previous**, **Next**, **Refresh**, **Policy**, and **Back**. Policy cycles Standard → Strict → Lenient. It changes scoring thresholds, never history or evidence requirements. Keyboard/controller menu actions and mouse buttons use the native GUI. Assets refresh on demand; lightweight cash/calendar observation runs once per second and around transactions.
 
 The ZIP filename must stay `FS25_LizardBank.zip`.
 
 ## What the figures mean
 
+- **Retained finance:** raw signed native records with original slot keys and category treatment. Unverified slots are not assigned calendar dates, summed as cash flow or treated as proof of a complete history. Compare them with the Finance screen and capture `lbSnapshot` to verify the running game's retained window.
+- **Observed history:** gross operating receipts/payments, separate native interest, asset transactions, financing and unclassified movements. Actual before/after cash deltas are recorded; unexplained balance changes become evidence gaps. Each farm retains up to 36 closed periods in `lizardBankHistory_<farmId>.xml` beside its normal save files. The first period is partial. Local cycle numbers begin at installation and follow native periods 1–12; they are not Gregorian years. Saving/reloading requires matching calendar, cash and debt anchors; an unmatched or malformed sidecar starts a partial chain instead of reusing unsupported history.
+- **Seasonal forecast:** after twelve consecutive complete, reconciled periods, the scenario repeats each matching seasonal period's operating receipts, payments and native interest. It covers the next twelve full periods and skips the current partial one. It does not forecast capital purchases, borrowing, principal repayments or closing bank balances. One cycle is limited evidence, not a calibrated prediction.
+- **Creditworthiness:** a provisional native-data score from 0–100, with component points, formulas, thresholds and reasons. It weights operating cash margin (35), cash buffer (30), native interest coverage (20), and native debt relative to operating cash (15). Assets are separate and add no score points. Missing periods, unresolved gaps, unclassified flows, unknown balances, unobserved interest on outstanding debt or no operating activity withhold the score. Full repayment capacity remains unproven without principal schedules and external obligations. This is an internal simulation policy, not a bureau score, default probability or loan approval.
 - **Cash and native debt:** the active farm's current balances. Other mods' separate financing is outside this build's coverage.
 - **Farmland:** current game-configured parcel prices and full parcel area, not just cultivated field area. Permission to work another farm's land does not imply ownership.
 - **Equipment:** owned machinery and implements use game-provided sale quotes. Leased and mission equipment are listed separately and excluded from owned-equipment value. Attached implements are counted individually once.
@@ -27,9 +33,11 @@ The ZIP filename must stay `FS25_LizardBank.zip`.
 - **Partial asset subtotal:** known cash, farmland, owned-equipment quotes, and building monetary values. It is not complete farm equity or a credit assessment. Livestock reference values stay separate; inventory monetary values, standing crops, timber, and other liabilities are not assessed. Bunker/ground heaps, construction stock and unsupported mod storage remain outside quantity coverage.
 - **Unavailable:** missing or invalid data remains unavailable. Known zero is displayed as zero; unknown values are omitted from the explicitly partial subtotal.
 
-## Next Windows check
+## Windows verification
 
-Compare the Livestock pages with the game's animal screen: groups, counts and health. Buy/sell animals and Refresh; check an empty husbandry and save/reload. Compare native reference values using the basis described in the report. Age/reproduction should remain unavailable; `lbSnapshot` can help verify their raw readings in a later build. Confirm livestock values stay outside the covered-assets subtotal.
+Start with a disposable new save and a copy of an established save. Reconcile native Finance rows; sell produce, buy inputs, trade assets, borrow/repay and check the observed classifications. Confirm a new save has no invented history or score. Save/reload and load a second save in the same session. Verify the Policy button and normal Back/controller behavior.
+
+Then use a disposable save to observe an initial partial period followed by twelve complete periods, with operating activity, to exercise forecasts and scoring. Do not edit the history file to manufacture eligibility. Unclassified livestock transactions, unknown mod money types, unsupported hooks, calendar skips and changing days per period can prevent a score; these are explicit coverage limits, not poor credit. The full checklist explains accelerated boundary testing and reconciliation.
 
 The full test checklist is in `docs/WINDOWS_TEST.md` in the source workspace. Record the game version, tested map/mods, mismatches, and any `[LizardBank]` messages in `log.txt`.
 
@@ -54,4 +62,6 @@ python3 tools/build.py
 
 The runtime mod has no dependencies. The local logic tests require a Lua 5.1 interpreter and stub GIANTS APIs; use your interpreter's executable path if it is not named `lua5.1`. Python 3 builds a deterministic ZIP, checks its structure, and prints its SHA-256. The build excludes source tests and tooling.
 
-`BankDataSource` coordinates dedicated property, inventory, stored-object and animal collectors. `BankReport` formats snapshots and `BankScreen` presents them. `LizardBank:openReport()` is the common entry point for future integrations, including a physical bank location. Research references and engine assumptions are recorded in `docs/data-sources.md` and the related source documents under `docs/`.
+`BankDataSource` coordinates separate asset and retained-finance collectors. `BankHistory` is the pure ledger; its runtime observer and XML store handle game hooks and persistence. `BankUnderwriting` performs deterministic analysis; `BankFinancialReport`/`BankReport` format snapshots and `BankScreen` presents them. `LizardBank:openReport()` remains the common entry point for future physical bank integrations.
+
+See `docs/finance-sources.md`, `docs/history-sources.md`, `docs/underwriting-model.md`, and `docs/VALIDATION.md` in the source workspace for evidence boundaries, scoring policy and test status. Copy or restore the **whole save folder**, including its Lizard Bank sidecars. Deleting a sidecar discards that farm's observed history; it does not change native finances. History stores game financial data locally and is not uploaded.

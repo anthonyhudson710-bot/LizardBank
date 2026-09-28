@@ -1,7 +1,7 @@
 -- Mission lifecycle, native input integration and the shared bank entry point.
--- Financial collection is deliberately confined to captureSnapshot().
+-- Asset scans occur on demand; lightweight money/calendar observation is separate.
 LizardBank = {
-    VERSION = "0.0.4",
+    VERSION = "0.0.5",
     GUI_NAME = "LizardBank",
     modName = g_currentModName or "FS25_LizardBank",
     modDirectory = g_currentModDirectory or "",
@@ -10,6 +10,7 @@ LizardBank = {
 }
 
 local HOOK_KEY = "__lizardBankInputHook"
+local LOAD_HOOK_KEY = "__lizardBankLoadHook"
 local profileGui
 
 local function log(message)
@@ -58,6 +59,52 @@ function LizardBank:loadMap()
     self:deleteMap()
     self.waitingForMission = true
     self.initFailed = false
+    self:installLoadHook()
+end
+
+-- Read the sidecar before the first clock update when this native callback is
+-- present. A first-update fallback never relaxes saved observation anchors.
+function LizardBank:installLoadHook()
+    if Mission00 == nil or type(Mission00.loadMission00Finished) ~= "function" then return end
+    local record = Mission00[LOAD_HOOK_KEY]
+    if record == nil then
+        record = {original = Mission00.loadMission00Finished}
+        record.wrapper = function(mission, ...)
+            local function packed(...) return {n = select("#", ...), ...} end
+            local result = packed(record.original(mission, ...))
+            local owner = record.owner
+            if owner ~= nil and mission == g_currentMission and owner:isSinglePlayer() then
+                owner.loadCompleteSeen = true
+                owner:startHistory("load_complete_candidate")
+            end
+            return unpack(result, 1, result.n)
+        end
+        Mission00[LOAD_HOOK_KEY] = record
+        Mission00.loadMission00Finished = record.wrapper
+    end
+    record.owner, self.loadHook = self, record
+end
+
+function LizardBank:removeLoadHook()
+    local record = self.loadHook
+    if record ~= nil and record.owner == self then
+        record.owner = nil
+        if Mission00 ~= nil and Mission00.loadMission00Finished == record.wrapper then
+            Mission00.loadMission00Finished = record.original
+            if Mission00[LOAD_HOOK_KEY] == record then Mission00[LOAD_HOOK_KEY] = nil end
+        end
+    end
+    self.loadHook, self.loadCompleteSeen = nil, nil
+end
+
+function LizardBank:startHistory(source)
+    if self.historyRuntime ~= nil or type(BankHistoryRuntime) ~= "table" or not self:isSinglePlayer() then return end
+    local ok, result = pcall(BankHistoryRuntime.new, g_currentMission)
+    if ok then
+        self.historyRuntime = result
+        result.capabilities.startTiming = source
+        result:safe(result.start)
+    else log("History initialization failed: " .. tostring(result)) end
 end
 
 function LizardBank:startMission()
@@ -138,14 +185,18 @@ function LizardBank:registerInputAction()
     end
 end
 
-function LizardBank:update()
-    -- Only a readiness check: once initialized, no frame work or asset scans.
+function LizardBank:update(dt)
     if self.waitingForMission then
         if g_currentMission == nil or g_currentMission.missionDynamicInfo == nil then
             return
         end
         self:startMission()
     end
+    if self.enabled and self.historyRuntime == nil and (self.loadHook == nil or self.loadCompleteSeen)
+        and g_currentMission ~= nil and g_currentMission.missionInfo ~= nil then
+        self:startHistory("first_update_fallback")
+    end
+    if self.historyRuntime ~= nil then self.historyRuntime:update(dt) end
     if not self.enabled or self.initialized or self.initFailed then
         return
     end
@@ -214,10 +265,25 @@ function LizardBank:openReport()
 end
 
 function LizardBank:captureSnapshot()
+    if self.enabled and self.historyRuntime == nil then self:startHistory("first_report_fallback") end
     local snapshot = BankDataSource.capture()
     snapshot.modVersion = self.VERSION
+    if self.historyRuntime ~= nil then snapshot.history = self.historyRuntime:report()
+    else snapshot.history = {periods = {}, materialGaps = {"History tracking unavailable."}} end
+    if type(BankUnderwriting) == "table" then
+        local ok, result = pcall(BankUnderwriting.prepare, snapshot, snapshot.history, {mode = snapshot.history.mode or "standard"})
+        if ok then snapshot.underwriting = result
+        else
+            snapshot.issues = snapshot.issues or {}
+            snapshot.issues[#snapshot.issues + 1] = {code = "UNDERWRITING_ERROR", detail = tostring(result)}
+        end
+    end
     self.lastSnapshot = snapshot
     return snapshot
+end
+
+function LizardBank:cyclePolicy()
+    if self.historyRuntime ~= nil then self.historyRuntime:cycleMode() end
 end
 
 function LizardBank:logSnapshot(snapshot)
@@ -267,6 +333,9 @@ end
 
 function LizardBank:deleteMap()
     self.enabled = false
+    self:removeLoadHook()
+    if self.historyRuntime ~= nil then self.historyRuntime:delete() end
+    self.historyRuntime = nil
     self:removeInputHook()
     if g_inputBinding ~= nil then
         if self.actionEventId ~= nil then g_inputBinding:removeActionEvent(self.actionEventId) end

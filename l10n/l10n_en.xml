@@ -101,12 +101,85 @@
         <text name="lb_basisSubtotal" text="Known covered assets sum available cash, land, owned equipment and buildings." />
         <text name="lb_basisUnknown" text="Unavailable values are omitted from subtotals; a verified zero is shown as zero." />
         <text name="lb_basisRefresh" text="This is a dated snapshot. Refresh to read changes made since it was captured." />
-        <text name="lb_basisNoGrade" text="No financial history, payment forecast or credit grade is produced in this build." />
+        <text name="lb_basisNoGrade" text="Creditworthiness uses observed cash history with explicit evidence gates; no loans are issued." />
         <text name="lb_error" text="The report could not be refreshed. Close and reopen it, then check log.txt." />
         <text name="lb_page" text="Page %d / %d" />
         <text name="lb_refresh" text="Refresh" />
         <text name="lb_previous" text="Previous" />
         <text name="lb_next" text="Next" />
         <text name="lb_back" text="Back" />
+        <text name="lb_finance" text="Retained game financial records" />
+        <text name="lb_history" text="Lizard Bank observed history" />
+        <text name="lb_forecast" text="Seasonal cash scenario" />
+        <text name="lb_credit" text="Creditworthiness evidence" />
+        <text name="lb_policy" text="Policy" />
+        <text name="lb_policyButton" text="Policy: %s" />
+        <text name="lb_mode_standard" text="Standard" />
+        <text name="lb_mode_strict" text="Strict" />
+        <text name="lb_mode_lenient" text="Lenient" />
+        <text name="lb_model" text="Model %s | Policy: %s" />
+        <text name="lb_policyMeaning" text="Policy changes score thresholds only. Evidence requirements stay the same." />
+        <text name="lb_score" text="Provisional native-data score: %s / 100 | %s" />
+        <text name="lb_scoreScope" text="Internal simulation score; not a credit-bureau score, default probability or loan approval." />
+        <text name="lb_insufficient" text="Insufficient history or unresolved evidence; no score assigned." />
+        <text name="lb_evidenceCount" text="Completed, reconciled periods in the latest cycle: %s / 12" />
+        <text name="lb_creditScope" text="External liabilities are unverified. No principal repayment schedule is available." />
+        <text name="lb_noDscr" text="Actual accounting profit and debt-service coverage are unavailable." />
+        <text name="lb_cashGeneration" text="Observed operating cash before interest: %s" />
+        <text name="lb_cashPrincipal" text="Observed cash after interest, before principal: %s" />
+        <text name="lb_component" text="%s: %s | Points: %s / %s" />
+        <text name="lb_componentThreshold" text="Weak threshold: %s | Strong threshold: %s" />
+        <text name="lb_operatingCashMargin" text="Operating cash margin" />
+        <text name="lb_cashBufferMonths" text="Cash buffer (months of observed costs)" />
+        <text name="lb_nativeInterestCoverage" text="Native interest coverage (times)" />
+        <text name="lb_nativeDebtToOperatingCash" text="Native debt / operating cash (times)" />
+        <text name="lb_band_favorable" text="Favorable" />
+        <text name="lb_band_guarded" text="Guarded" />
+        <text name="lb_band_strained" text="Strained" />
+        <text name="lb_reason" text="%s: %s" />
+        <text name="lb_collateral" text="Known asset quotes, separate from repayment score: %s" />
+        <text name="lb_collateralWarning" text="Partial quotes exclude unverified liens and external debt; assets do not add score points." />
+        <text name="lb_nativeFinanceWarning" text="Native history dates, order, padding and retained window are unverified in FS25." />
+        <text name="lb_nativeFinanceMeaning" text="Raw game records; sign/category semantics are unverified. Treatments below are bank policy." />
+        <text name="lb_financeCount" text="Readable figures: %s | Unavailable: %s | Unclassified: %s" />
+        <text name="lb_financeSource" text="Source: %s" />
+        <text name="lb_nativeRow" text="%s | Native slot %s | %s" />
+        <text name="lb_nativeAmount" text="Raw amount: %s | Policy treatment: %s" />
+        <text name="lb_nativeCurrent" text="Current candidate" />
+        <text name="lb_nativeHistory" text="Retained candidate" />
+        <text name="lb_noNativeFinance" text="No readable retained records. Past activity is not reconstructed." />
+        <text name="lb_class_operating" text="Operating" />
+        <text name="lb_class_capital" text="Asset transaction" />
+        <text name="lb_class_financing" text="Financing" />
+        <text name="lb_class_interest" text="Native interest" />
+        <text name="lb_class_unclassified" text="Unclassified" />
+        <text name="lb_historyBasis" text="Local cycles start at installation; period 1-12 follows the game's seasonal order." />
+        <text name="lb_historyNotYear" text="Cycle numbers are tracking labels, not calendar years. Native archive slots are not imported." />
+        <text name="lb_historyLimit" text="History retains up to %s completed or closed periods per farm." />
+        <text name="lb_historySave" text="History saving is attempted during the game save; reload checks matching evidence." />
+        <text name="lb_persistence" text="Persistence capability: %s" />
+        <text name="lb_period" text="Local cycle %s | Native period %s | %s" />
+        <text name="lb_complete" text="Complete and reconciled" />
+        <text name="lb_partialPeriod" text="Partial / insufficient evidence" />
+        <text name="lb_currentPeriod" text="Current period in progress" />
+        <text name="lb_periodRange" text="Observed game days %s to %s | Events: %s" />
+        <text name="lb_periodCash" text="Opening cash: %s | Closing observed cash: %s" />
+        <text name="lb_operatingTotals" text="Operating receipts: %s | Operating payments: %s" />
+        <text name="lb_interestTotal" text="Interest paid: %s" />
+        <text name="lb_capitalTotals" text="Asset receipts: %s | Asset payments: %s" />
+        <text name="lb_financingTotals" text="Financing receipts: %s | Principal/financing payments: %s" />
+        <text name="lb_unknownTotals" text="Unclassified receipts: %s | Unclassified payments: %s" />
+        <text name="lb_categoryTotals" text="%s | In: %s | Out: %s" />
+        <text name="lb_historyMissing" text="No observed history yet. New and existing saves start with a partial period." />
+        <text name="lb_historyUnclassified" text="Unclassified movements and reconciliation gaps prevent scoring; zero is never substituted." />
+        <text name="lb_forecastMissing" text="Insufficient history: a full comparable, reconciled seasonal cycle is required." />
+        <text name="lb_forecastMethod" text="Scenario repeats the latest observed matching seasonal period; confidence is limited to one cycle." />
+        <text name="lb_forecastScope" text="Next 12 full periods only. Current partial period, capital spending and financing are excluded." />
+        <text name="lb_forecastNoBalance" text="Cash before principal is not a safe loan payment or a forecast closing bank balance." />
+        <text name="lb_forecastSource" text="Baseline: local cycle %s, native period %s" />
+        <text name="lb_forecastNet" text="Scenario cash after interest, before principal: %s" />
+        <text name="lb_forecastAnnual" text="Scenario total before principal: %s" />
+        <text name="lb_nativeNotTotals" text="These records are not dated cash-flow totals and never establish complete observation." />
+        <text name="lb_persistenceCandidate" text="Save integration present; verify in Windows" />
     </texts>
 </l10n>
