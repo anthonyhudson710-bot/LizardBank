@@ -1,4 +1,6 @@
 -- Run from the repository root: lua tests/test_data.lua
+dofile("scripts/BankPropertyDataSource.lua")
+dofile("scripts/BankInventoryDataSource.lua")
 dofile("scripts/BankDataSource.lua")
 
 local count = 0
@@ -237,6 +239,34 @@ test("mixed numeric and string asset IDs sort consistently", function()
     equal(snapshot.equipment.items[2].id, 10)
     equal(snapshot.equipment.items[3].id, "15")
     equal(snapshot.equipment.ownedValue, 6)
+end)
+
+test("capture integrates buildings and quantities and isolates a failed added section", function()
+    local context = fixture()
+    local silo = {
+        getUniqueId = function() return "silo" end,
+        getName = function() return "Farm silo" end,
+        getOwnerFarmId = function() return 7 end,
+        getMonetaryValue = function() return 300 end,
+        spec_silo = {storages = {{getOwnerFarmId = function() return 7 end,
+            getFillLevels = function() return {[2] = 500} end}}}
+    }
+    context.g_currentMission.placeableSystem = {placeables = {silo}}
+    context.g_fillTypeManager = {getFillTypeByIndex = function() return {name = "WHEAT", title = "Wheat"} end}
+    local snapshot = BankDataSource.capture(context)
+    equal(snapshot.schemaVersion, 2)
+    equal(snapshot.buildings.totalValue, 300)
+    equal(snapshot.inventory.items[1].quantity, 500)
+    equal(snapshot.inventory.items[1].location, "Farm silo")
+    local original = BankPropertyDataSource.collect
+    BankPropertyDataSource.collect = function() error("broken added collector") end
+    local ok, result = pcall(BankDataSource.capture, context)
+    BankPropertyDataSource.collect = original
+    assert(ok, tostring(result))
+    equal(result.cash.value, 120000)
+    equal(result.buildings.status, "partial")
+    equal(result.inventory.items[1].quantity, 500)
+    assert(hasIssue(result, "SECTION_ERROR"))
 end)
 
 if _G.test == nil then

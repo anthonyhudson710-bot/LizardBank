@@ -40,7 +40,9 @@ local function runtimeContext()
         g_localPlayer = g_localPlayer,
         g_farmManager = g_farmManager,
         g_farmlandManager = g_farmlandManager,
+        g_fillTypeManager = g_fillTypeManager,
         FarmManager = FarmManager,
+        FillType = FillType,
         VehiclePropertyState = VehiclePropertyState,
         g_gameVersion = g_gameVersion,
         g_gameVersionDisplay = g_gameVersionDisplay
@@ -349,13 +351,15 @@ end
 function BankDataSource.capture(context)
     context = context or runtimeContext()
     local snapshot = {
-        schemaVersion = 1,
+        schemaVersion = 2,
         farm = {},
         capturedAt = {},
         cash = {status = "unavailable", source = "unavailable"},
         debt = {status = "unavailable", source = "unavailable"},
         land = {items = {}, unknownValueCount = 0, unknownAreaCount = 0, status = "unavailable"},
         equipment = {items = {}, ownedCount = 0, leasedCount = 0, borrowedCount = 0, excludedCount = 0, unknownValueCount = 0, status = "unavailable"},
+        buildings = {items = {}, status = "unavailable"},
+        inventory = {items = {}, status = "unavailable"},
         issues = {},
         capabilities = {},
         gameVersion = tostring(context.g_gameVersionDisplay or context.g_gameVersion or "unavailable")
@@ -373,5 +377,7 @@ function BankDataSource.capture(context)
     collect("capturedAt", readDate)
     collect("land", readLand)
     collect("equipment", readEquipment)
+    collect("buildings", BankPropertyDataSource.collect)
+    collect("inventory", BankInventoryDataSource.collect)
     return snapshot
 end

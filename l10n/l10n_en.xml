@@ -7,6 +7,8 @@
         <text name="lb_summary" text="Financial summary" />
         <text name="lb_farmland" text="Owned farmland" />
         <text name="lb_equipment" text="Equipment and implements" />
+        <text name="lb_buildings" text="Owned buildings and placeables" />
+        <text name="lb_inventory" text="Stored goods and supplies" />
         <text name="lb_basis" text="How to read this report" />
         <text name="lb_issues" text="Coverage issues" />
         <text name="lb_unavailable" text="Unavailable" />
@@ -17,6 +19,27 @@
         <text name="lb_debt" text="Native loan balance: %s" />
         <text name="lb_landValue" text="Known farmland value: %s" />
         <text name="lb_equipmentValue" text="Known owned-equipment sale quotes: %s" />
+        <text name="lb_buildingValue" text="Known owned-building monetary value: %s" />
+        <text name="lb_buildingCounts" text="Owned placeables: %s | Unvalued: %s | Omitted records: %s" />
+        <text name="lb_buildingItem" text="%s (ID %s)" />
+        <text name="lb_buildingDetail" text="Game monetary value: %s" />
+        <text name="lb_buildingSaleBlocked" text="This placeable currently blocks selling; value is not sale proceeds." />
+        <text name="lb_noBuildings" text="No owned buildings or placeables found." />
+        <text name="lb_buildingsUnavailable" text="Building coverage is unavailable or incomplete. Zero must not be assumed." />
+        <text name="lb_inventoryCounts" text="Containers checked: %s | Verified empty compartments: %s" />
+        <text name="lb_inventoryIssues" text="Unavailable records: %s | Excluded containers or compartments: %s" />
+        <text name="lb_inventoryItem" text="%s: %s" />
+        <text name="lb_inventoryLocation" text="Location: %s | Container: %s" />
+        <text name="lb_inventoryKind" text="Storage type: %s" />
+        <text name="lb_inventoryStorage" text="Silo or registered storage" />
+        <text name="lb_inventoryProduction" text="Production storage" />
+        <text name="lb_inventoryVehicle" text="Equipment fill unit" />
+        <text name="lb_inventoryPallet" text="Pallet or big bag" />
+        <text name="lb_inventoryUnavailable" text="Stored-goods coverage is unavailable. Zero must not be assumed." />
+        <text name="lb_inventoryNoItems" text="No nonempty goods recorded in the containers checked; coverage is partial." />
+        <text name="lb_inventoryBasis" text="Quantities only; no separate inventory value is added to the asset subtotal." />
+        <text name="lb_inventoryProvenance" text="Container ownership does not prove cargo ownership, including contract crops." />
+        <text name="lb_inventoryMissing" text="Bales, virtual bale/pallet storage and unsupported mod storage are omitted." />
         <text name="lb_partialAssets" text="Known covered assets, including cash (partial): %s" />
         <text name="lb_area" text="Known parcel area: %s" />
         <text name="lb_landCount" text="Owned parcels recorded: %s" />
@@ -43,11 +66,13 @@
         <text name="lb_basisCash" text="Cash and native debt are the current active farm balances." />
         <text name="lb_basisLand" text="Land uses current game-configured parcel prices and total parcel area." />
         <text name="lb_basisVehicle" text="Equipment uses the game's current sale quote, including specialization changes." />
+        <text name="lb_basisBuilding" text="Buildings use engine monetary values, not temporary construction undo refunds." />
+        <text name="lb_basisBuildingSale" text="Building value does not guarantee a sale is permitted or that proceeds match." />
         <text name="lb_basisQuote" text="Sale location, condition changes and other mods may change the final proceeds." />
         <text name="lb_basisExclusions" text="Leased, borrowed and unidentified ownership are excluded from owned assets." />
-        <text name="lb_basisMissing" text="Not separately valued: buildings, inventories, animals, crops and timber." />
+        <text name="lb_basisMissing" text="Not separately valued: inventories, animals, crops and timber." />
         <text name="lb_basisDebt" text="External financing and other liabilities are not included in native debt." />
-        <text name="lb_basisSubtotal" text="Known covered assets sum available cash, land and owned-equipment values." />
+        <text name="lb_basisSubtotal" text="Known covered assets sum available cash, land, owned equipment and buildings." />
         <text name="lb_basisUnknown" text="Unavailable values are omitted from subtotals; a verified zero is shown as zero." />
         <text name="lb_basisRefresh" text="This is a dated snapshot. Refresh to read changes made since it was captured." />
         <text name="lb_basisNoGrade" text="No financial history, payment forecast or credit grade is produced in this build." />

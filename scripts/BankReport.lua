@@ -9,6 +9,8 @@ BankReport.ENGLISH = {
     lb_summary = "Financial summary",
     lb_farmland = "Owned farmland",
     lb_equipment = "Equipment and implements",
+    lb_buildings = "Owned buildings and placeables",
+    lb_inventory = "Stored goods and supplies",
     lb_basis = "How to read this report",
     lb_issues = "Coverage issues",
     lb_unavailable = "Unavailable",
@@ -19,6 +21,27 @@ BankReport.ENGLISH = {
     lb_debt = "Native loan balance: %s",
     lb_landValue = "Known farmland value: %s",
     lb_equipmentValue = "Known owned-equipment sale quotes: %s",
+    lb_buildingValue = "Known owned-building monetary value: %s",
+    lb_buildingCounts = "Owned placeables: %s | Unvalued: %s | Omitted records: %s",
+    lb_buildingItem = "%s (ID %s)",
+    lb_buildingDetail = "Game monetary value: %s",
+    lb_buildingSaleBlocked = "This placeable currently blocks selling; value is not sale proceeds.",
+    lb_noBuildings = "No owned buildings or placeables found.",
+    lb_buildingsUnavailable = "Building coverage is unavailable or incomplete. Zero must not be assumed.",
+    lb_inventoryCounts = "Containers checked: %s | Verified empty compartments: %s",
+    lb_inventoryIssues = "Unavailable records: %s | Excluded containers or compartments: %s",
+    lb_inventoryItem = "%s: %s",
+    lb_inventoryLocation = "Location: %s | Container: %s",
+    lb_inventoryKind = "Storage type: %s",
+    lb_inventoryStorage = "Silo or registered storage",
+    lb_inventoryProduction = "Production storage",
+    lb_inventoryVehicle = "Equipment fill unit",
+    lb_inventoryPallet = "Pallet or big bag",
+    lb_inventoryUnavailable = "Stored-goods coverage is unavailable. Zero must not be assumed.",
+    lb_inventoryNoItems = "No nonempty goods recorded in the containers checked; coverage is partial.",
+    lb_inventoryBasis = "Quantities only; no separate inventory value is added to the asset subtotal.",
+    lb_inventoryProvenance = "Container ownership does not prove cargo ownership, including contract crops.",
+    lb_inventoryMissing = "Bales, virtual bale/pallet storage and unsupported mod storage are omitted.",
     lb_partialAssets = "Known covered assets, including cash (partial): %s",
     lb_area = "Known parcel area: %s",
     lb_landCount = "Owned parcels recorded: %s",
@@ -45,11 +68,13 @@ BankReport.ENGLISH = {
     lb_basisCash = "Cash and native debt are the current active farm balances.",
     lb_basisLand = "Land uses current game-configured parcel prices and total parcel area.",
     lb_basisVehicle = "Equipment uses the game's current sale quote, including specialization changes.",
+    lb_basisBuilding = "Buildings use engine monetary values, not temporary construction undo refunds.",
+    lb_basisBuildingSale = "Building value does not guarantee a sale is permitted or that proceeds match.",
     lb_basisQuote = "Sale location, condition changes and other mods may change the final proceeds.",
     lb_basisExclusions = "Leased, borrowed and unidentified ownership are excluded from owned assets.",
-    lb_basisMissing = "Not separately valued: buildings, inventories, animals, crops and timber.",
+    lb_basisMissing = "Not separately valued: inventories, animals, crops and timber.",
     lb_basisDebt = "External financing and other liabilities are not included in native debt.",
-    lb_basisSubtotal = "Known covered assets sum available cash, land and owned-equipment values.",
+    lb_basisSubtotal = "Known covered assets sum available cash, land, owned equipment and buildings.",
     lb_basisUnknown = "Unavailable values are omitted from subtotals; a verified zero is shown as zero.",
     lb_basisRefresh = "This is a dated snapshot. Refresh to read changes made since it was captured.",
     lb_basisNoGrade = "No financial history, payment forecast or credit grade is produced in this build.",
@@ -141,6 +166,21 @@ function BankReport.buildPages(snapshot, i18n, customEnvironment)
         end
         return string.format("%.2f ha", value)
     end
+    local function quantity(item)
+        if item.quantityStatus == "unavailable" or not isNumber(item.quantity) then
+            return t("lb_unavailable")
+        end
+        if item.unit == "l" and i18n ~= nil and type(i18n.formatVolume) == "function" then
+            local ok, formatted = pcall(i18n.formatVolume, i18n, item.quantity, 1)
+            if ok and type(formatted) == "string" then return formatted end
+        end
+        local number = string.format("%.1f", item.quantity)
+        if i18n ~= nil and type(i18n.formatNumber) == "function" then
+            local ok, formatted = pcall(i18n.formatNumber, i18n, item.quantity, 1)
+            if ok and type(formatted) == "string" then number = formatted end
+        end
+        return number .. " " .. clean(item.unitText or item.unit or t("lb_unavailable"))
+    end
     local function known(value)
         return value ~= nil and clean(value) or t("lb_unavailable")
     end
@@ -171,12 +211,14 @@ function BankReport.buildPages(snapshot, i18n, customEnvironment)
 
     local farm, capturedAt = snapshot.farm or {}, snapshot.capturedAt or {}
     local land, equipment = snapshot.land or {}, snapshot.equipment or {}
+    local buildings, inventory = snapshot.buildings or {}, snapshot.inventory or {}
     local landItems, equipmentItems = land.items or {}, equipment.items or {}
     local cash, debt = amount(snapshot.cash), amount(snapshot.debt)
     local landValue, vehicleValue = total(land, "totalValue"), total(equipment, "ownedValue")
+    local buildingValue = total(buildings, "totalValue")
     local partialValue, hasValue = 0, false
     -- An array would stop at its first unavailable (nil) member.
-    for _, value in pairs({cash = cash, land = landValue, equipment = vehicleValue}) do
+    for _, value in pairs({cash = cash, land = landValue, equipment = vehicleValue, buildings = buildingValue}) do
         if isNumber(value) then
             partialValue, hasValue = partialValue + value, true
         end
@@ -194,6 +236,7 @@ function BankReport.buildPages(snapshot, i18n, customEnvironment)
         t("lb_debt", money(debt)),
         t("lb_landValue", money(landValue)),
         t("lb_equipmentValue", money(vehicleValue)),
+        t("lb_buildingValue", money(buildingValue)),
         t("lb_partialAssets", money(hasValue and partialValue or nil)),
         "",
         t("lb_partialWarning")
@@ -242,8 +285,49 @@ function BankReport.buildPages(snapshot, i18n, customEnvironment)
     end
     section("lb_equipment", equipmentLines)
 
+    local buildingsKnown = buildings.status == "available" or buildings.status == "partial"
+    local buildingItems = buildings.items or {}
+    local buildingLines = {
+        t("lb_buildingCounts", known(buildingsKnown and buildings.ownedCount or nil),
+            known(buildingsKnown and buildings.unknownValueCount or nil), known(buildingsKnown and buildings.excludedCount or nil)),
+        t("lb_buildingValue", money(buildingValue)),
+        t("lb_basisBuilding"), t("lb_basisBuildingSale"), ""
+    }
+    if buildings.status ~= "available" then buildingLines[#buildingLines + 1] = t("lb_buildingsUnavailable") end
+    if #buildingItems == 0 and buildings.status == "available" then buildingLines[#buildingLines + 1] = t("lb_noBuildings") end
+    for _, item in ipairs(buildingItems) do
+        buildingLines[#buildingLines + 1] = t("lb_buildingItem", known(item.name), known(item.id))
+        buildingLines[#buildingLines + 1] = t("lb_buildingDetail", money(amount(item)))
+        if item.canBeSold == false then buildingLines[#buildingLines + 1] = t("lb_buildingSaleBlocked") end
+        buildingLines[#buildingLines + 1] = ""
+    end
+    section("lb_buildings", buildingLines)
+
+    local inventoryKnown = inventory.status == "available" or inventory.status == "partial"
+    local inventoryLines = {
+        t("lb_inventoryCounts", known(inventoryKnown and inventory.sourceCount or nil), known(inventoryKnown and inventory.zeroCount or nil)),
+        t("lb_inventoryIssues", known(inventoryKnown and inventory.unknownCount or nil), known(inventoryKnown and inventory.excludedCount or nil)),
+        t("lb_inventoryBasis"), t("lb_inventoryProvenance"), t("lb_inventoryMissing"), ""
+    }
+    local inventoryItems = inventory.items or {}
+    if not inventoryKnown then
+        inventoryLines[#inventoryLines + 1] = t("lb_inventoryUnavailable")
+    elseif #inventoryItems == 0 then
+        inventoryLines[#inventoryLines + 1] = t("lb_inventoryNoItems")
+    end
+    local storageKeys = {storage = "lb_inventoryStorage", production = "lb_inventoryProduction",
+        vehicle = "lb_inventoryVehicle", pallet = "lb_inventoryPallet"}
+    for _, item in ipairs(inventoryItems) do
+        inventoryLines[#inventoryLines + 1] = t("lb_inventoryItem", known(item.fillTypeTitle or item.fillTypeName), quantity(item))
+        inventoryLines[#inventoryLines + 1] = t("lb_inventoryLocation", known(item.location), t(ownershipKeys[item.ownership] or "lb_unknown"))
+        inventoryLines[#inventoryLines + 1] = t("lb_inventoryKind", t(storageKeys[item.kind] or "lb_unavailable"))
+        inventoryLines[#inventoryLines + 1] = ""
+    end
+    section("lb_inventory", inventoryLines)
+
     section("lb_basis", {
         t("lb_basisCash"), t("lb_basisLand"), t("lb_basisVehicle"), t("lb_basisQuote"),
+        t("lb_basisBuilding"), t("lb_basisBuildingSale"), t("lb_inventoryBasis"),
         t("lb_basisExclusions"), t("lb_basisMissing"), t("lb_basisDebt"),
         t("lb_basisSubtotal"), t("lb_basisUnknown"), t("lb_basisRefresh"), t("lb_basisNoGrade")
     })

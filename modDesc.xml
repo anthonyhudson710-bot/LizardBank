@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="utf-8" standalone="no"?>
 <modDesc descVersion="93">
     <author>Lizard Bank</author>
-    <version>0.0.1</version>
+    <version>0.0.2</version>
     <title><en>Lizard Bank</en></title>
     <description>
-        <en><![CDATA[A financial snapshot of your farm: cash, native debt, owned land and equipment.
+        <en><![CDATA[A financial snapshot of your farm: cash, native debt, owned land, equipment, buildings and stored-goods quantities.
 Single-player preview. Open with Right Ctrl+B (remappable in Controls).
 Values cover only the listed assets; this preview does not calculate a credit grade or change your finances.]]></en>
     </description>
@@ -12,6 +12,8 @@ Values cover only the listed assets; this preview does not calculate a credit gr
     <multiplayer supported="false"/>
     <l10n filenamePrefix="l10n/l10n"/>
     <extraSourceFiles>
+        <sourceFile filename="scripts/BankPropertyDataSource.lua"/>
+        <sourceFile filename="scripts/BankInventoryDataSource.lua"/>
         <sourceFile filename="scripts/BankDataSource.lua"/>
         <sourceFile filename="scripts/BankReport.lua"/>
         <sourceFile filename="scripts/BankScreen.lua"/>

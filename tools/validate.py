@@ -42,8 +42,14 @@ def validate(root=ROOT):
         return errors, warnings
     if manifest.tag != "modDesc":
         errors.append("modDesc.xml must have a modDesc root")
-    if manifest.findtext("version") != "0.0.1":
-        errors.append("First playable manifest version must be 0.0.1")
+    version = manifest.findtext("version") or ""
+    if not re.fullmatch(r"\d+\.\d+\.\d+(?:\.\d+)?", version):
+        errors.append("Manifest version must contain three or four numeric components")
+    bootstrap = root / "scripts/LizardBank.lua"
+    if bootstrap.is_file():
+        declared = re.search(r'\bVERSION\s*=\s*"([^"]+)"', bootstrap.read_text(encoding="utf-8"))
+        if declared is None or declared.group(1) != version:
+            errors.append("Manifest and diagnostic mod versions must match")
     if not manifest.get("descVersion", "").isdigit():
         errors.append("modDesc.xml must have a numeric descVersion")
     for field in ("author", "title/en", "description/en", "iconFilename"):

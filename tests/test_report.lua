@@ -11,6 +11,14 @@ local i18n = {
     formatArea = function(_, value, decimals)
         assertEqual(decimals, 2)
         return string.format("%.2f ac", value * 2.47105)
+    end,
+    formatVolume = function(_, value, decimals)
+        assertEqual(decimals, 1)
+        return string.format("%.1f L", value)
+    end,
+    formatNumber = function(_, value, decimals)
+        assertEqual(decimals, 1)
+        return string.format("%.1f", value)
     end
 }
 
@@ -187,4 +195,77 @@ test("localization is scoped to this mod and malformed translation falls back", 
     assertEqual(BankReport.getText(translated, "lb_title", "FS25_LizardBank"), "Banque")
     local report = joined(BankReport.buildPages(snapshot(), translated, "FS25_LizardBank"))
     assertContains(report, "Cash: 100")
+end)
+
+test("building monetary values extend the subtotal without promising sale proceeds", function()
+    local data = snapshot()
+    data.buildings = {status = "partial", totalValue = 400, ownedCount = 2,
+        unknownValueCount = 1, excludedCount = 0, items = {
+            {id = "shed", name = "Old shed", status = "available", value = 400, canBeSold = false},
+            {id = "barn", name = "Mod barn", status = "unavailable", value = 999}
+        }}
+    local report = joined(BankReport.buildPages(data, i18n))
+    assertContains(report, "including cash (partial): $750")
+    assertContains(report, "Known owned-building monetary value: $400")
+    assertContains(report, "Owned placeables: 2 | Unvalued: 1")
+    assertContains(report, "Old shed (ID shed)")
+    assertContains(report, "Game monetary value: Unavailable")
+    assertContains(report, "currently blocks selling")
+    assertFalse(report:find("$999", 1, true) ~= nil)
+end)
+
+test("goods show native quantities and container ownership without adding inventory money", function()
+    local data = snapshot()
+    data.inventory = {status = "partial", sourceCount = 3, zeroCount = 1, unknownCount = 1, excludedCount = 0,
+        totalValue = 999, items = {
+            {location = "Leased trailer", fillTypeTitle = "Wheat", fillTypeName = "WHEAT", quantity = 2500.5,
+                quantityStatus = "available", unit = "l", kind = "vehicle", ownership = "leased", value = 999},
+            {location = "Tree nursery", fillTypeTitle = "Saplings", quantity = 12,
+                quantityStatus = "available", unit = "units", unitText = "trees", kind = "pallet", ownership = "owned"},
+            {location = "Mod silo", fillTypeName = "Soybeans", quantity = 999,
+                quantityStatus = "unavailable", unit = "l", kind = "storage", ownership = "owned"}
+        }}
+    local report = joined(BankReport.buildPages(data, i18n))
+    assertContains(report, "including cash (partial): $350")
+    assertContains(report, "Wheat: 2500.5 L")
+    assertContains(report, "Location: Leased trailer | Container: Leased")
+    assertContains(report, "Saplings: 12.0 trees")
+    assertContains(report, "Soybeans: Unavailable")
+    assertContains(report, "Container ownership does not prove cargo ownership")
+    assertFalse(report:find("$999", 1, true) ~= nil)
+end)
+
+test("missing buildings and goods remain unavailable while verified empty buildings show zero", function()
+    local data = snapshot()
+    local report = joined(BankReport.buildPages(data, i18n))
+    assertContains(report, "Owned placeables: Unavailable")
+    assertContains(report, "Containers checked: Unavailable")
+    assertFalse(report:find("No owned buildings", 1, true) ~= nil)
+    data.buildings = {status = "available", totalValue = 0, ownedCount = 0,
+        unknownValueCount = 0, excludedCount = 0, items = {}}
+    report = joined(BankReport.buildPages(data, i18n))
+    assertContains(report, "Known owned-building monetary value: $0")
+    assertContains(report, "No owned buildings or placeables found")
+end)
+
+test("large stored-goods reports preserve every location within page limits", function()
+    local data = snapshot()
+    data.inventory = {status = "partial", sourceCount = 90, zeroCount = 0, unknownCount = 0, excludedCount = 0, items = {}}
+    for index = 1, 90 do
+        data.inventory.items[index] = {location = "Silo " .. index, fillTypeTitle = "Wheat", quantity = index,
+            unit = "l", ownership = "owned", kind = "storage"}
+    end
+    local pages = BankReport.buildPages(data, i18n)
+    assertContains(joined(pages), "Location: Silo 90 | Container: Owned")
+    for _, page in ipairs(pages) do
+        local _, count = page.text:gsub("\n", "")
+        assertTrue(count + 1 <= BankReport.LINES_PER_PAGE)
+    end
+end)
+
+test("overflow across otherwise finite asset sections is unavailable", function()
+    local data = snapshot()
+    data.land.totalValue = 1e308
+    data.buildings = {status = "available", totalValue = 1e308, items = {}}
+    assertContains(joined(BankReport.buildPages(data, i18n)), "including cash (partial): Unavailable")
 end)
