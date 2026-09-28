@@ -1,4 +1,4 @@
-# Windows validation: 0.0.7
+# Windows validation: 0.0.8
 
 For the complete ordered run, every catalog scenario, category/boundary variant
 and named local-test inventory, use the root [test.md](../test.md). This page
@@ -19,7 +19,7 @@ boundaries remain NOT_EXERCISED.
 1. Exit FS25, build with `python3 tools/build.py`, and install
    `dist/FS25_LizardBank.zip` in the active game's mods directory, normally
    `Documents\My Games\FarmingSimulator2025\mods`. Documents may be redirected.
-   Remove duplicate older copies. Enable version 0.0.7 on each test save.
+   Remove duplicate older copies. Enable version 0.0.8 on each test save.
 2. Use a disposable new save and a **whole-folder copy** of an established save.
    Prefer the established copy with a silo, loaded vehicle and some goods or
    livestock already present; do not spend the test building an entire farm.

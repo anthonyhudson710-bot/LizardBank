@@ -253,3 +253,42 @@ test("finance MoneyType same-policy aliases coalesce and custom equality cannot 
     assertEqual(category, nil)
     assertEqual(class, "unclassified")
 end)
+
+test("finance property income keeps observed signed amounts without verifying retained periods", function()
+    local before = capture({finances = {propertyIncome = 4564}})
+    local after = capture({finances = {propertyIncome = 5216}})
+    assertEqual(row(after, "propertyIncome").rawSignedValue - row(before, "propertyIncome").rawSignedValue, 652)
+    assertEqual(row(before, "propertyIncome").classification, "operating")
+    assertEqual(row(after, "propertyIncome").classification, "operating")
+    assertContains(after.finance.classificationSource, "lizardbank.finance-map.v2")
+    assertEqual(after.finance.verification, "unverified")
+    assertEqual(after.finance.windowStatus, "unverified")
+    assertEqual(after.finance.completedPeriodCount, nil)
+    assertEqual(row(capture({finances = {propertyIncome = -652}}), "propertyIncome").rawSignedValue, -652)
+    assertEqual(row(capture({finances = {propertyIncome = 0}}), "propertyIncome").rawSignedValue, 0)
+    assertEqual(BankFinanceDataSource.classifyCategory("PROPERTY_INCOME"), "unclassified")
+    assertEqual(BankFinanceDataSource.classifyCategory("customPropertyIncome"), "unclassified")
+end)
+
+test("finance property income matches only an unambiguous exact native identity", function()
+    local property = {}
+    local category, class, source = BankFinanceDataSource.classifyMoneyType(property, {PROPERTY_INCOME = property})
+    assertEqual(category, "propertyIncome")
+    assertEqual(class, "operating")
+    assertContains(source, "lizardbank.finance-map.v2 exact runtime MoneyType.PROPERTY_INCOME")
+    for _, registry in ipairs({{}, {UNKNOWN = property, PROPERTY_INCOME = property},
+        {PROPERTY_INCOME = property, SOLD_PRODUCTS = property},
+        {PROPERTY_INCOME = property, LOAN_INTEREST = property}}) do
+        category, class = BankFinanceDataSource.classifyMoneyType(property, registry)
+        assertEqual(category, nil)
+        assertEqual(class, "unclassified")
+    end
+    category, class = BankFinanceDataSource.classifyMoneyType({statistic = "propertyIncome"}, {PROPERTY_INCOME = property})
+    assertEqual(category, nil)
+    assertEqual(class, "unclassified")
+    local equality = {__eq = function() return true end}
+    category, class = BankFinanceDataSource.classifyMoneyType(setmetatable({}, equality),
+        {PROPERTY_INCOME = setmetatable({}, equality)})
+    assertEqual(category, nil)
+    assertEqual(class, "unclassified")
+end)

@@ -42,11 +42,19 @@ Scans are bounded to 256 bucket descriptors, 512 keys per scanned map, and 8,192
 
 ## Classification policy and live MoneyType helper
 
-Classification is Lizard Bank policy, identified as `lizardbank.finance-map.v1`, rather than a native accounting guarantee. Only exact names match. Categories are not inferred by substring, capitalization, amount sign, position or translated text.
+Classification is Lizard Bank policy, identified as `lizardbank.finance-map.v2`, rather than a native accounting guarantee. Only exact names match. Categories are not inferred by substring, capitalization, amount sign, position or translated text.
+
+Version 0.0.8 adds the exact `PROPERTY_INCOME` / `propertyIncome` operating
+mapping. GIANTS' FS25 [PlaceableIncomePerHour](https://gdn.giants-software.com/documentation_scripting_fs25.php?category=78&class=741&version=engine)
+documents a recurring owner payment with that native MoneyType in
+`onHourChanged`. The supplied 0.0.6 log separately captures a 652 cash receipt
+and a retained `propertyIncome` change from 4564 to 5216. This supports the
+specific adapter and policy addition, not a blanket Finance-screen reconciliation
+or retention/date contract. Older unclassified ledger entries are not rewritten.
 
 | Class | Exact retained-category policy keys |
 | --- | --- |
-| Operating | `soldProducts`, `soldMilk`, `soldBales`, `soldWood`, `harvestIncome`, `missionIncome`, `fieldJobIncome`, `vehicleRunningCost`, `vehicleLeasingCost`, `propertyMaintenance`, `wagePayment`, `purchaseSeeds`, `purchaseFertilizer`, `purchaseSaplings`, `purchaseFuel`, `purchaseWater` |
+| Operating | `soldProducts`, `soldMilk`, `soldBales`, `soldWood`, `propertyIncome`, `harvestIncome`, `missionIncome`, `fieldJobIncome`, `vehicleRunningCost`, `vehicleLeasingCost`, `propertyMaintenance`, `wagePayment`, `purchaseSeeds`, `purchaseFertilizer`, `purchaseSaplings`, `purchaseFuel`, `purchaseWater` |
 | Capital | `newVehicles`, `soldVehicles`, `constructionCost`, `boughtFields`, `soldFields`, `soldBuildings` |
 | Financing | `loanInterest`, `loanBorrowed`, `loanRepaid` |
 | Unclassified | Everything else, including ambiguous animal purchases/sales, miscellaneous income, transfers, balance totals, and custom categories without a policy rule. |

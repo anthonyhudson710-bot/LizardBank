@@ -33,6 +33,11 @@ native hook timing, native save promotion or every mod's money path.
   first-update or first-report fallback is recorded in diagnostics. Timestamp
   mismatches are never silently waived. Native load ordering still needs Windows
   validation, including interaction with another mod that changes the calendar.
+  The supplied 0.0.6 log installed the hook but never recorded its callback;
+  history began only at the first report. Version 0.0.8 therefore always permits
+  the first-mission-update fallback when no runtime exists, even with an installed
+  but undispatched hook. This prevents indefinite waiting with diagnostics off.
+  It does not establish exact native reload timing; all resume anchors remain strict.
 - Native [saveXMLFile](https://gdn.giants-software.com/documentation_scripting_fs25.php?category=33&function=884&version=engine)
   documents a boolean write result; [loadXMLFile](https://gdn.giants-software.com/documentation_scripting_fs25.php?category=33&function=881&version=engine)
   documents zero on failure. The sidecar uses explicit string attributes for

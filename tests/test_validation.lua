@@ -84,6 +84,18 @@ test("report pages verify physical line limits but cannot prove visual clipping"
     assertEqual(outcomes.AUTO_GUI_REPORT_PAGES, "FAIL")
 end)
 
+test("independent page validation catches empty separator-only pages within the line limit", function()
+    for _, text in ipairs({"", " ", "\n\t", "Visible content"}) do
+        local results = {}
+        BankValidation.pages({{title = "Stored goods", text = text}}, 14,
+            function(id, result) results[id] = result end)
+        assertEqual(results.AUTO_GUI_PAGE_LINES, "PASS")
+        local expected = text == "Visible content" and "PASS" or "FAIL"
+        assertEqual(results.AUTO_GUI_PAGE_TEXT, expected)
+        assertEqual(results.AUTO_GUI_REPORT_PAGES, expected)
+    end
+end)
+
 test("unknown farm identity is unavailable while a malformed positive fraction is a failure", function()
     local s = base(); s.farm.id = nil
     assertTrue(outcome(BankValidation.evaluate(s), "FARM_ID", "UNAVAILABLE"))

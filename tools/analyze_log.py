@@ -82,7 +82,7 @@ def problem(target, code, message, ref=None):
 def new_mission(run, mission_id):
     return {"run": run, "mission": mission_id, "problems": [], "checks": {},
             "captures": [], "dumps": [], "eventCounts": {origin: Counter() for origin in ORIGINS},
-            "failureEvidence": [], "manualComparisons": [], "latestCapabilities": {},
+            "failureEvidence": [], "availabilityEvidence": [], "manualComparisons": [], "latestCapabilities": {},
             "latestGates": {}, "summaryCoverage": {}, "began": False, "ended": False,
             "summaries": 0, "lastSummaryLine": None, "lastCheckLine": None, "lastActivityLine": None,
             "_openCaptures": {}, "_openDumps": {}, "_summary": None,
@@ -400,7 +400,14 @@ def read_event(mission, record, ref, raw):
     if event == "history.save.begin" and integer(data.get("transactionId")):
         mission["_saveIds"][origin].add(data["transactionId"])
     read_history_call(mission, event, data, origin, ref)
-    if event.endswith(".error") or event.endswith(".recordError") or data.get("succeeded") is False or data.get("written") is False or data.get("nativeReturnedFalse") is True:
+    # Old validation builds use succeeded=false for an absent first-use sidecar
+    # and absent XML capability. Keep these visible, without treating absence as
+    # a failed read attempt. Malformed/read-failed files remain failure evidence.
+    availability_only = event == "history.xml.read" and data.get("succeeded") is False and data.get("reason") in (
+        "Sidecar absent", "Native XML functions unavailable")
+    if availability_only:
+        mission["availabilityEvidence"].append({**ref, "data": data, "raw": raw, "outcome": "UNAVAILABLE"})
+    if event.endswith(".error") or event.endswith(".recordError") or (data.get("succeeded") is False and not availability_only) or data.get("written") is False or data.get("nativeReturnedFalse") is True:
         mission["failureEvidence"].append({**ref, "data": data, "raw": raw})
 
 
@@ -590,6 +597,9 @@ def render_markdown(report):
                 out.append("")
             out += ["### Scenario coverage", "", "All %s listed scenarios remain **NOT_EXERCISED** by this analyzer. Low-level invariants and synthetic fixture success do not certify these scenarios. Local catalog: `%s` (%s)." % (len(mission["scenarioCoverage"]), inline(report["catalog"].get("source")), report["catalog"].get("status")), ""]
             out += ["- **%s** [%s]: %s — NOT_EXERCISED." % (row["id"], row.get("evidence", "unknown"), inline(row.get("description", "Description unavailable"))) for row in mission["scenarioCoverage"]]
+            out += ["", "### Unavailable history sources", "",
+                    "Absence can be normal on first use; these records neither establish a read failure nor prove saved history should have been absent.", ""]
+            out += ["- **UNAVAILABLE**: %s (%s)." % (inline(row["data"]), where(row)) for row in mission["availabilityEvidence"]] or ["None recorded."]
             out += ["", "### Failure evidence", ""]
             if not mission["failureEvidence"]:
                 out.append("No failure record captured. This does not establish that unobserved behavior passed.")

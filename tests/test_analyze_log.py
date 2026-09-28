@@ -68,6 +68,24 @@ def codes(report):
 
 
 class AnalyzerTests(unittest.TestCase):
+    def test_absent_first_use_history_is_visible_unavailable_not_a_read_failure(self):
+        for reason in ("Sidecar absent", "Native XML functions unavailable"):
+            with self.subTest(reason=reason):
+                report = Log().begin().snapshot().add("history.xml.read", {
+                    "filename": "lizardBankHistory_1.xml", "succeeded": False, "reason": reason}).finish().report()
+                self.assertEqual(report["failureCount"], 0)
+                self.assertEqual(mission(report)["availabilityEvidence"][0]["outcome"], "UNAVAILABLE")
+                self.assertIn(reason, analyzer.render_markdown(report))
+
+    def test_corrupt_history_and_explicit_failures_are_not_hidden_by_missing_sidecar_handling(self):
+        log = Log().begin().snapshot().add("history.xml.read", {
+            "succeeded": False, "reason": "Bounded XML decode rejected sidecar"})
+        log.add("history.xml.read", {"succeeded": False, "reason": "Sidecar absent"})
+        log.check("HISTORY_XML_RELEASE", "FAIL")
+        report = log.finish({"HISTORY_XML_RELEASE": {"FAIL": 1}}).report()
+        self.assertEqual(report["failureCount"], 2)
+        self.assertEqual(len(mission(report)["availabilityEvidence"]), 1)
+
     def test_clean_transport_never_claims_scenario_or_real_world_success(self):
         report = Log().begin().snapshot().check("AUTO_CASH_FINITE", "PASS").finish({"AUTO_CASH_FINITE": {"PASS": 1}}).report()
         self.assertEqual(report["integrity"], "CAPTURED")

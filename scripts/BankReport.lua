@@ -249,6 +249,11 @@ function BankReport.buildPages(snapshot, i18n, customEnvironment)
                 wrapped[#wrapped + 1] = physicalLine
             end
         end
+        -- Item separators aid reading inside a section, but a final separator
+        -- must not spill past a full page and create a blank trailing page.
+        while #wrapped > 0 and not wrapped[#wrapped]:find("%S") do
+            wrapped[#wrapped] = nil
+        end
         for first = 1, #wrapped, BankReport.LINES_PER_PAGE do
             local pageLines = {}
             for index = first, math.min(first + BankReport.LINES_PER_PAGE - 1, #wrapped) do

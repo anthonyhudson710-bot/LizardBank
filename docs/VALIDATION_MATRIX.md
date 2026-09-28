@@ -1,4 +1,4 @@
-# Lizard Bank 0.0.7 validation matrix
+# Lizard Bank 0.0.8 validation matrix
 
 This is an audit reset. **Earlier overall success reports are not relied upon as
 acceptance evidence. All Windows scenarios below begin NOT_EXERCISED.** This
@@ -68,7 +68,7 @@ Related local checks: [tools/build.py](../tools/build.py), [tools/validate.py](.
 
 | ID | Scenario | Required evidence / setup | Expected oracle | Log / supporting evidence |
 | --- | --- | --- | --- | --- |
-| PKG-001 | Release identity and root archive layout | **structural**. Run build/validator and inspect ZIP names and version fields. | ZIP root contains modDesc.xml; manifest, bootstrap and diagnostics agree on 0.0.7. | Build output, ZIP list, startup version. |
+| PKG-001 | Release identity and root archive layout | **structural**. Run build/validator and inspect ZIP names and version fields. | ZIP root contains modDesc.xml; manifest, bootstrap and diagnostics agree on 0.0.8. | Build output, ZIP list, startup version. |
 | PKG-002 | Every declared source and GUI resource exists with exact case | **structural**. Validate sourceFiles, GUI/profile/icon/localization references. | Manifest load order resolves every global dependency; no absent resource or callback. | Validator output, native load errors. |
 | PKG-003 | XML, localization and icon integrity | **structural**. Run local validation; inspect native mod selection icon/title. | XML parses; every lb_* string resolves; icon is valid 512px DXT5 with mipmaps. | Validator output and selection screenshot. |
 | PKG-004 | Deterministic packaging and isolated runtime payload | **structural**. Build twice and compare hashes/list; install only ZIP. | Repeated unchanged builds have identical SHA256; archive includes needed runtime files and no tests, caches or dev tools. | Build hashes and ZIP inventory. |
@@ -346,7 +346,7 @@ Related local checks: [diagnostic transport](../tests/test_diagnostics.lua), [co
 
 | ID | Scenario | Required evidence / setup | Expected oracle | Log / supporting evidence |
 | --- | --- | --- | --- | --- |
-| DEBUG-001 | Validation-release startup configuration | **manual**. Launch defaults, disable/re-enable, reload with config false on disposable install if needed. | 0.0.7 begins enabled with read tracing; config false or lbDebug off stops diagnostic work without disabling bank. | Configuration/mode transitions and quiet period. |
+| DEBUG-001 | Validation-release startup configuration | **manual**. Launch defaults, disable/re-enable, reload with config false on disposable install if needed. | 0.0.8 begins enabled with read tracing; config false or lbDebug off stops diagnostic work without disabling bank. | Configuration/mode transitions and quiet period. |
 | DEBUG-002 | Diagnostic commands and invalid input | **manual**. Run each command and invalid mode/empty label variants. | lbDebug on/trace/off/summary, lbValidate label and lbMark label respond without crashing; malformed args are rejected/useful. | Command responses and labeled checkpoints. |
 | DEBUG-003 | Automatic capture reasons and bounded frequency | **runtime**. Follow short route and inspect capture reason/count over idle interval. | First-ready/open/Refresh/save/reload/settled transaction/boundary captures are attributable and coalesced, not per-frame full scans. | Capture sequence/reasons/timing and limits. |
 | DEBUG-004 | Read provenance, classification and exclusion evidence | **runtime**. Inspect representative successful, missing and excluded source traces; use fixtures for faults. | Trace identifies attempted accessor/field, type/status, fallback and include/exclude reason without extra economic reads. | Read and decision events with source and reason. |
@@ -380,6 +380,7 @@ policy inventory, not a claim that every name exists in every FS25 build.
 | SOLD_MILK | soldMilk | operating / operating |
 | SOLD_BALES | soldBales | operating / operating |
 | SOLD_WOOD | soldWood | operating / operating |
+| PROPERTY_INCOME | propertyIncome | operating / operating; documented recurring placeable income |
 | MISSIONS, MISSION_REWARD | missionIncome | operating / operating |
 | No live mapping inferred | harvestIncome, fieldJobIncome | unknown live / operating retained policy |
 | PURCHASE_SEEDS | purchaseSeeds | operating / operating |

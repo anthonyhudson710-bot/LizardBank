@@ -1,7 +1,7 @@
 -- Mission lifecycle, native input integration and the shared bank entry point.
 -- Asset scans occur on demand; lightweight money/calendar observation is separate.
 LizardBank = {
-    VERSION = "0.0.7",
+    VERSION = "0.0.8",
     GUI_NAME = "LizardBank",
     modName = g_currentModName or "FS25_LizardBank",
     modDirectory = g_currentModDirectory or "",
@@ -222,7 +222,10 @@ function LizardBank:update(dt)
         end
         self:startMission()
     end
-    if self.enabled and self.historyRuntime == nil and (self.loadHook == nil or self.loadCompleteSeen)
+    -- A class callback may have been captured before our loadMap hook, or never
+    -- dispatched on this loading path. Its presence must not prevent fallback
+    -- observation forever when diagnostics are off and no report is opened.
+    if self.enabled and self.historyRuntime == nil
         and g_currentMission ~= nil and g_currentMission.missionInfo ~= nil then
         self:startHistory("first_update_fallback")
     end

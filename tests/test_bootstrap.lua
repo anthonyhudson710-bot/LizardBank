@@ -228,7 +228,6 @@ test("load completion initializes history before first clock update and preserve
         return runtime
     end}
     bank:loadMap()
-    bank:update(0)
     assertEqual(starts, 0)
     local a, b, c = env.Mission00.loadMission00Finished(env.g_currentMission, "native")
     assertEqual(a, nil); assertEqual(b, "native"); assertEqual(c, 77)
@@ -240,6 +239,26 @@ test("load completion initializes history before first clock update and preserve
     bank:deleteMap()
     assertEqual(deleted, 1)
     assertEqual(env.Mission00.loadMission00Finished, original)
+end)
+
+test("an undispatched load callback cannot block first-update history with diagnostics off", function()
+    local bank, env, state = fixture()
+    local starts = 0
+    env.BankDiagnostics = nil
+    env.Mission00 = {loadMission00Finished = function() end}
+    env.BankHistoryRuntime = {new = function()
+        local runtime = {capabilities = {}, start = function() starts = starts + 1 end, update = function() end}
+        function runtime:safe(method) return method(self) end
+        return runtime
+    end}
+    bank:loadMap()
+    bank:update(16)
+    assertEqual(starts, 1)
+    assertEqual(state.captures, 0)
+    assertEqual(bank.historyRuntime.capabilities.startTiming, "first_update_fallback")
+    env.Mission00.loadMission00Finished(env.g_currentMission)
+    bank:update(16)
+    assertEqual(starts, 1, "Late callback must not duplicate observers")
 end)
 
 test("later loading wrappers survive unload and cannot resurrect the bank observer", function()

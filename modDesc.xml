@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8" standalone="no"?>
 <modDesc descVersion="93">
     <author>Lizard Bank</author>
-    <version>0.0.7</version>
+    <version>0.0.8</version>
     <title><en>Lizard Bank</en></title>
     <description>
         <en><![CDATA[Farm assets, retained financial records, ongoing history, seasonal cash scenarios and explainable creditworthiness.

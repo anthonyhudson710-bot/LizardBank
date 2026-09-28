@@ -30,12 +30,13 @@ local function diagnosticBoundary(stage, name, ok, status, detail)
     end
 end
 
-local MAP_SOURCE = "lizardbank.finance-map.v1 (policy; native category matching unverified)"
+local MAP_ID = "lizardbank.finance-map.v2"
+local MAP_SOURCE = MAP_ID .. " (policy; native category matching unverified)"
 local CATEGORY_MAP = {
     soldProducts = "operating", soldMilk = "operating", soldBales = "operating", soldWood = "operating",
     harvestIncome = "operating", missionIncome = "operating", fieldJobIncome = "operating",
     vehicleRunningCost = "operating", vehicleLeasingCost = "operating",
-    propertyMaintenance = "operating", wagePayment = "operating",
+    propertyMaintenance = "operating", propertyIncome = "operating", wagePayment = "operating",
     purchaseSeeds = "operating", purchaseFertilizer = "operating",
     purchaseSaplings = "operating", purchaseFuel = "operating", purchaseWater = "operating",
     newVehicles = "capital", soldVehicles = "capital", constructionCost = "capital",
@@ -55,6 +56,10 @@ local MONEY_TYPE_MAP = {
     VEHICLE_RUNNING_COSTS = {"vehicleRunningCost", "operating"},
     VEHICLE_LEASING_COSTS = {"vehicleLeasingCost", "operating"},
     PROPERTY_MAINTENANCE = {"propertyMaintenance", "operating"},
+    -- PlaceableIncomePerHour:onHourChanged pays the owner using this exact
+    -- native identity. Runtime propertyIncome +652 independently matched the
+    -- observed cash movement; classification does not verify retained dates.
+    PROPERTY_INCOME = {"propertyIncome", "operating"},
     WAGE_PAYMENT = {"wagePayment", "operating"},
     PURCHASE_VEHICLE = {"newVehicles", "capital"}, NEW_VEHICLES = {"newVehicles", "capital"},
     SOLD_VEHICLES = {"soldVehicles", "capital"}, VEHICLE_BUY = {"newVehicles", "capital"},
@@ -144,7 +149,7 @@ function BankFinanceDataSource.classifyCategory(categoryKey)
         return CATEGORY_MAP[categoryKey], MAP_SOURCE
     end
     diagnosticDecision("FINANCE_CATEGORY_POLICY", "UNAVAILABLE", categoryKey, "unclassified", "No exact policy mapping.")
-    return "unclassified", "No exact category match in lizardbank.finance-map.v1"
+    return "unclassified", "No exact category match in " .. MAP_ID
 end
 
 function BankFinanceDataSource.classifyMoneyType(moneyType, moneyTypes)
@@ -173,10 +178,10 @@ function BankFinanceDataSource.classifyMoneyType(moneyType, moneyTypes)
     end
     if matchedKey ~= nil then
         diagnosticDecision("MONEY_TYPE_CLASSIFICATION", "PASS", matchedName, matchedClass, "Exact runtime identity; analytical treatment is policy.")
-        return matchedKey, matchedClass, "lizardbank.finance-map.v1 exact runtime MoneyType." .. matchedName
+        return matchedKey, matchedClass, MAP_ID .. " exact runtime MoneyType." .. matchedName
     end
     diagnosticDecision("MONEY_TYPE_CLASSIFICATION", "UNAVAILABLE", nil, "unclassified", "No exact runtime identity match.")
-    return nil, "unclassified", "No exact runtime MoneyType identity match in lizardbank.finance-map.v1"
+    return nil, "unclassified", "No exact runtime MoneyType identity match in " .. MAP_ID
 end
 
 local function copyMetadata(snapshot, object)

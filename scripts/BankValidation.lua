@@ -242,6 +242,11 @@ function BankValidation.pages(pages, lineLimit, output)
         local valid = type(page.title) == "string" and type(page.text) == "string" and breaks + 1 <= lineLimit
         if not valid then ok = false end
         output("AUTO_GUI_PAGE_LINES", valid and "PASS" or "FAIL", {page = i, lines = breaks + 1, maximum = lineLimit})
+        local titlePresent = type(page.title) == "string" and page.title:find("%S") ~= nil
+        local textPresent = type(page.text) == "string" and page.text:find("%S") ~= nil
+        if not titlePresent or not textPresent then ok = false end
+        output("AUTO_GUI_PAGE_TEXT", titlePresent and textPresent and "PASS" or "FAIL",
+            {page = i, titlePresent = titlePresent, textPresent = textPresent})
     end
     output("AUTO_GUI_REPORT_PAGES", ok and "PASS" or "FAIL", {count = type(pages) == "table" and #pages or nil})
 end

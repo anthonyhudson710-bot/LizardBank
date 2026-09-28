@@ -325,4 +325,79 @@ test("native transaction observations drive a complete model and survive save re
     end)
 end)
 
+test("documented property income reconciles a 652 receipt and preserves refund gross direction", function()
+    fixture(function(c)
+        dofile("scripts/BankFinanceDataSource.lua")
+        local previousValidation = BankValidation
+        dofile("scripts/BankValidation.lua")
+        local validate = BankValidation.evaluate
+        BankValidation = previousValidation
+        local property = {}
+        MoneyType.PROPERTY_INCOME = property
+        local stats = {finances = {propertyIncome = 4564}}
+        c.farms[7].stats = stats
+        local function snapshot()
+            local result = {farm = {id = 7}, capabilities = {}, issues = {}, history = c.runtime:report(),
+                cash = {status = "available", value = c.farms[7].money},
+                debt = {status = "available", value = c.farms[7].loan}}
+            BankFinanceDataSource.collect(result, {g_currentMission = c.mission, g_farmManager = g_farmManager})
+            return result
+        end
+        local function compared(before, after, expectedDelta)
+            local matched
+            for _, result in ipairs(validate(after, before)) do
+                if result.id == "AUTO_NATIVE_FINANCE_DELTA_MAGNITUDE" then
+                    matched = true
+                    equal(result.outcome, "PASS")
+                    equal(result.evidence.category, "propertyIncome")
+                    equal(result.evidence.nativeChange, expectedDelta)
+                    equal(result.evidence.observedNet, expectedDelta)
+                end
+            end
+            assert(matched, "Property income must match the retained current category at both checkpoints")
+        end
+        local before = snapshot()
+        local a, b, flag = c.mission:addMoney(652, 7, property, true)
+        equal(a, nil); equal(b, "native-money"); equal(flag, true)
+        stats.finances.propertyIncome = 5216 -- Independent retained-row fixture from the supplied native trace.
+        local incoming = snapshot()
+        compared(before, incoming, 652)
+        equal(c.runtime.active.current.operatingRevenue, 652)
+        equal(c.runtime.active.current.unclassifiedInflow, 0)
+        equal(#c.runtime:report().materialGaps, 0)
+        c.mission:addMoney(-652, 7, property, true)
+        stats.finances.propertyIncome = 4564
+        compared(incoming, snapshot(), -652)
+        local period = c.runtime.active.current
+        equal(period.operatingRevenue, 652); equal(period.operatingExpense, 652)
+        equal(period.categories.propertyIncome.inflow, 652); equal(period.categories.propertyIncome.outflow, 652)
+        equal(period.unclassifiedInflow, 0); equal(period.unclassifiedOutflow, 0)
+        equal(period.events, 2); equal(period.closingCash, period.openingCash)
+        equal(c.counts(), 2)
+        c.mission:addMoney(0, 7, property, true)
+        equal(period.events, 2)
+    end)
+end)
+
+test("property mapping does not relabel earlier unknown activity or accept conflicting aliases", function()
+    fixture(function(c)
+        dofile("scripts/BankFinanceDataSource.lua")
+        local property = {}
+        MoneyType.PROPERTY_INCOME, MoneyType.UNKNOWN = property, property
+        c.mission:addMoney(652, 7, property)
+        local period = c.runtime.active.current
+        equal(period.unclassifiedInflow, 652); equal(period.operatingRevenue, 0)
+        MoneyType.UNKNOWN = nil
+        c.mission:addMoney(652, 7, property)
+        equal(period.operatingRevenue, 652)
+        equal(period.unclassifiedInflow, 652) -- Earlier ledger evidence stays unknown.
+        assert(#c.runtime:report().materialGaps > 0)
+        MoneyType.LOAN_INTEREST = property
+        c.mission:addMoney(-40, 7, property)
+        equal(period.unclassifiedOutflow, 40)
+        equal(period.operatingExpense, 0); equal(period.interestExpense, 0)
+        equal(period.events, 3)
+    end)
+end)
+
 if not _G.test then print(tostring(count) .. " history runtime tests passed") end

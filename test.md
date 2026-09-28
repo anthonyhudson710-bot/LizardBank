@@ -1,6 +1,6 @@
 # Lizard Bank: complete validation run
 
-This is the executable manual runbook for the current **0.0.7** validation build. Start
+This is the executable manual runbook for the current **0.0.8** validation build. Start
 here. It covers the shipped code, resources, development tools, 190 catalog
 scenarios, their boundary/category variants, and every named local test.
 Previous reports of success are not acceptance evidence.
@@ -577,7 +577,7 @@ Related local checks: [tools/build.py](tools/build.py), [tools/validate.py](tool
 
 | ID | Scenario | Required evidence / setup | Expected oracle | Log / supporting evidence |
 | --- | --- | --- | --- | --- |
-| PKG-001 | ☐ Release identity and root archive layout | **structural**. Run build/validator and inspect ZIP names and version fields. | ZIP root contains modDesc.xml; manifest, bootstrap and diagnostics agree on 0.0.7. | Build output, ZIP list, startup version. |
+| PKG-001 | ☐ Release identity and root archive layout | **structural**. Run build/validator and inspect ZIP names and version fields. | ZIP root contains modDesc.xml; manifest, bootstrap and diagnostics agree on 0.0.8. | Build output, ZIP list, startup version. |
 | PKG-002 | ☐ Every declared source and GUI resource exists with exact case | **structural**. Validate sourceFiles, GUI/profile/icon/localization references. | Manifest load order resolves every global dependency; no absent resource or callback. | Validator output, native load errors. |
 | PKG-003 | ☐ XML, localization and icon integrity | **structural**. Run local validation; inspect native mod selection icon/title. | XML parses; every lb_* string resolves; icon is valid 512px DXT5 with mipmaps. | Validator output and selection screenshot. |
 | PKG-004 | ☐ Deterministic packaging and isolated runtime payload | **structural**. Build twice and compare hashes/list; install only ZIP. | Repeated unchanged builds have identical SHA256; archive includes needed runtime files and no tests, caches or dev tools. | Build hashes and ZIP inventory. |
@@ -855,7 +855,7 @@ Related local checks: [diagnostic transport](tests/test_diagnostics.lua), [colle
 
 | ID | Scenario | Required evidence / setup | Expected oracle | Log / supporting evidence |
 | --- | --- | --- | --- | --- |
-| DEBUG-001 | ☐ Validation-release startup configuration | **manual**. Launch defaults, disable/re-enable, reload with config false on disposable install if needed. | 0.0.7 begins enabled with read tracing; config false or lbDebug off stops diagnostic work without disabling bank. | Configuration/mode transitions and quiet period. |
+| DEBUG-001 | ☐ Validation-release startup configuration | **manual**. Launch defaults, disable/re-enable, reload with config false on disposable install if needed. | 0.0.8 begins enabled with read tracing; config false or lbDebug off stops diagnostic work without disabling bank. | Configuration/mode transitions and quiet period. |
 | DEBUG-002 | ☐ Diagnostic commands and invalid input | **manual**. Run each command and invalid mode/empty label variants. | lbDebug on/trace/off/summary, lbValidate label and lbMark label respond without crashing; malformed args are rejected/useful. | Command responses and labeled checkpoints. |
 | DEBUG-003 | ☐ Automatic capture reasons and bounded frequency | **runtime**. Follow short route and inspect capture reason/count over idle interval. | First-ready/open/Refresh/save/reload/settled transaction/boundary captures are attributable and coalesced, not per-frame full scans. | Capture sequence/reasons/timing and limits. |
 | DEBUG-004 | ☐ Read provenance, classification and exclusion evidence | **runtime**. Inspect representative successful, missing and excluded source traces; use fixtures for faults. | Trace identifies attempted accessor/field, type/status, fallback and include/exclude reason without extra economic reads. | Read and decision events with source and reason. |
@@ -889,6 +889,7 @@ policy inventory, not a claim that every name exists in every FS25 build.
 | SOLD_MILK | soldMilk | operating / operating |
 | SOLD_BALES | soldBales | operating / operating |
 | SOLD_WOOD | soldWood | operating / operating |
+| PROPERTY_INCOME | propertyIncome | operating / operating; documented recurring placeable income |
 | MISSIONS, MISSION_REWARD | missionIncome | operating / operating |
 | No live mapping inferred | harvestIncome, fieldJobIncome | unknown live / operating retained policy |
 | PURCHASE_SEEDS | purchaseSeeds | operating / operating |
@@ -952,47 +953,49 @@ retain their SYNTHETIC_ provenance.
 
 <!-- LOCAL_TEST_CHECKLIST_START -->
 
-Inventory: **243 Lua tests and 56 Python test methods**, including parameterized subcases where declared. These are checklists, not prefilled passes.
+Inventory: **250 Lua tests and 58 Python test methods**, including parameterized subcases where declared. These are checklists, not prefilled passes.
 
-### tests/test_analyze_log.py — 37 named tests
+### tests/test_analyze_log.py — 39 named tests
 
-- [ ] [test_clean_transport_never_claims_scenario_or_real_world_success](tests/test_analyze_log.py#L71)
-- [ ] [test_sticky_fail_then_pass_and_repeated_summaries_not_added](tests/test_analyze_log.py#L81)
-- [ ] [test_lost_check_recovered_from_summary_without_double_counting_later_event](tests/test_analyze_log.py#L92)
-- [ ] [test_regressing_summary_cannot_erase_failure](tests/test_analyze_log.py#L102)
-- [ ] [test_distinct_warning_unknown_and_not_exercised_counts](tests/test_analyze_log.py#L110)
-- [ ] [test_timestamp_prefix_and_lua_numeric_object_keys_preserved](tests/test_analyze_log.py#L119)
-- [ ] [test_malformed_truncated_json_and_native_warnings_preserved](tests/test_analyze_log.py#L126)
-- [ ] [test_nonfinite_json_invalid_envelopes_and_unknown_schema_not_trusted](tests/test_analyze_log.py#L137)
-- [ ] [test_budget_gaps_truncation_logger_error_never_all_clear](tests/test_analyze_log.py#L146)
-- [ ] [test_missing_capture_dump_summary_and_mission_ends](tests/test_analyze_log.py#L155)
-- [ ] [test_dump_incomplete_false_omitted_and_end_without_begin](tests/test_analyze_log.py#L162)
-- [ ] [test_seq_reset_groups_processes_and_mission_change_groups_same_process](tests/test_analyze_log.py#L169)
-- [ ] [test_duplicate_sequence_exact_copy_not_counted_but_conflicting_fail_retained](tests/test_analyze_log.py#L179)
-- [ ] [test_no_activity_or_diagnostics_off_is_incomplete](tests/test_analyze_log.py#L189)
-- [ ] [test_partial_start_and_late_check_without_final_summary](tests/test_analyze_log.py#L196)
-- [ ] [test_user_values_stay_user_declared_and_do_not_pass_scenario](tests/test_analyze_log.py#L203)
-- [ ] [test_synthetic_transactions_periods_and_gates_never_native_evidence](tests/test_analyze_log.py#L213)
-- [ ] [test_missing_origin_not_promoted_to_runtime](tests/test_analyze_log.py#L229)
-- [ ] [test_latest_capabilities_and_native_window_gates_keep_source_references](tests/test_analyze_log.py#L238)
-- [ ] [test_save_stage_counts_do_not_claim_independent_saves](tests/test_analyze_log.py#L251)
-- [ ] [test_missing_catalog_remains_explicit_and_runtime_coverage_is_retained](tests/test_analyze_log.py#L261)
-- [ ] [test_catalog_parser_reads_real_catalog_and_refuses_unknown_layout](tests/test_analyze_log.py#L269)
-- [ ] [test_bounded_summary_failure_reserve_retains_failures_after_log_budget](tests/test_analyze_log.py#L278)
-- [ ] [test_bounded_failure_list_truncation_not_silently_lost](tests/test_analyze_log.py#L295)
-- [ ] [test_pre_mission_mode_record_does_not_invent_missing_lifecycle](tests/test_analyze_log.py#L301)
-- [ ] [test_successful_capture_requires_dump_failed_capture_is_not_usable](tests/test_analyze_log.py#L310)
-- [ ] [test_post_summary_transaction_requires_new_summary](tests/test_analyze_log.py#L318)
-- [ ] [test_history_nested_passthrough_and_origins_correlate_independently](tests/test_analyze_log.py#L322)
-- [ ] [test_history_multiple_farm_sidecar_stages_are_one_save_lifecycle](tests/test_analyze_log.py#L339)
-- [ ] [test_history_native_error_and_save_false_preserve_failure_without_broken_pairing](tests/test_analyze_log.py#L352)
-- [ ] [test_history_duplicate_invocation_result_begin_and_end_are_detected](tests/test_analyze_log.py#L366)
-- [ ] [test_history_missing_terminal_and_orphan_result_never_complete](tests/test_analyze_log.py#L377)
-- [ ] [test_history_invalid_parent_origin_and_result_mismatches_are_not_trusted](tests/test_analyze_log.py#L386)
-- [ ] [test_history_sidecar_missing_or_duplicate_stages_and_missing_identity](tests/test_analyze_log.py#L395)
-- [ ] [test_history_correlation_bounded_and_unknown_stage_cannot_finish_save](tests/test_analyze_log.py#L405)
-- [ ] [test_duplicate_json_key_cannot_overwrite_failure_claim](tests/test_analyze_log.py#L420)
-- [ ] [test_cli_markdown_json_outputs_and_cannot_overwrite_original](tests/test_analyze_log.py#L427)
+- [ ] [test_absent_first_use_history_is_visible_unavailable_not_a_read_failure](tests/test_analyze_log.py#L71)
+- [ ] [test_corrupt_history_and_explicit_failures_are_not_hidden_by_missing_sidecar_handling](tests/test_analyze_log.py#L80)
+- [ ] [test_clean_transport_never_claims_scenario_or_real_world_success](tests/test_analyze_log.py#L89)
+- [ ] [test_sticky_fail_then_pass_and_repeated_summaries_not_added](tests/test_analyze_log.py#L99)
+- [ ] [test_lost_check_recovered_from_summary_without_double_counting_later_event](tests/test_analyze_log.py#L110)
+- [ ] [test_regressing_summary_cannot_erase_failure](tests/test_analyze_log.py#L120)
+- [ ] [test_distinct_warning_unknown_and_not_exercised_counts](tests/test_analyze_log.py#L128)
+- [ ] [test_timestamp_prefix_and_lua_numeric_object_keys_preserved](tests/test_analyze_log.py#L137)
+- [ ] [test_malformed_truncated_json_and_native_warnings_preserved](tests/test_analyze_log.py#L144)
+- [ ] [test_nonfinite_json_invalid_envelopes_and_unknown_schema_not_trusted](tests/test_analyze_log.py#L155)
+- [ ] [test_budget_gaps_truncation_logger_error_never_all_clear](tests/test_analyze_log.py#L164)
+- [ ] [test_missing_capture_dump_summary_and_mission_ends](tests/test_analyze_log.py#L173)
+- [ ] [test_dump_incomplete_false_omitted_and_end_without_begin](tests/test_analyze_log.py#L180)
+- [ ] [test_seq_reset_groups_processes_and_mission_change_groups_same_process](tests/test_analyze_log.py#L187)
+- [ ] [test_duplicate_sequence_exact_copy_not_counted_but_conflicting_fail_retained](tests/test_analyze_log.py#L197)
+- [ ] [test_no_activity_or_diagnostics_off_is_incomplete](tests/test_analyze_log.py#L207)
+- [ ] [test_partial_start_and_late_check_without_final_summary](tests/test_analyze_log.py#L214)
+- [ ] [test_user_values_stay_user_declared_and_do_not_pass_scenario](tests/test_analyze_log.py#L221)
+- [ ] [test_synthetic_transactions_periods_and_gates_never_native_evidence](tests/test_analyze_log.py#L231)
+- [ ] [test_missing_origin_not_promoted_to_runtime](tests/test_analyze_log.py#L247)
+- [ ] [test_latest_capabilities_and_native_window_gates_keep_source_references](tests/test_analyze_log.py#L256)
+- [ ] [test_save_stage_counts_do_not_claim_independent_saves](tests/test_analyze_log.py#L269)
+- [ ] [test_missing_catalog_remains_explicit_and_runtime_coverage_is_retained](tests/test_analyze_log.py#L279)
+- [ ] [test_catalog_parser_reads_real_catalog_and_refuses_unknown_layout](tests/test_analyze_log.py#L287)
+- [ ] [test_bounded_summary_failure_reserve_retains_failures_after_log_budget](tests/test_analyze_log.py#L296)
+- [ ] [test_bounded_failure_list_truncation_not_silently_lost](tests/test_analyze_log.py#L313)
+- [ ] [test_pre_mission_mode_record_does_not_invent_missing_lifecycle](tests/test_analyze_log.py#L319)
+- [ ] [test_successful_capture_requires_dump_failed_capture_is_not_usable](tests/test_analyze_log.py#L328)
+- [ ] [test_post_summary_transaction_requires_new_summary](tests/test_analyze_log.py#L336)
+- [ ] [test_history_nested_passthrough_and_origins_correlate_independently](tests/test_analyze_log.py#L340)
+- [ ] [test_history_multiple_farm_sidecar_stages_are_one_save_lifecycle](tests/test_analyze_log.py#L357)
+- [ ] [test_history_native_error_and_save_false_preserve_failure_without_broken_pairing](tests/test_analyze_log.py#L370)
+- [ ] [test_history_duplicate_invocation_result_begin_and_end_are_detected](tests/test_analyze_log.py#L384)
+- [ ] [test_history_missing_terminal_and_orphan_result_never_complete](tests/test_analyze_log.py#L395)
+- [ ] [test_history_invalid_parent_origin_and_result_mismatches_are_not_trusted](tests/test_analyze_log.py#L404)
+- [ ] [test_history_sidecar_missing_or_duplicate_stages_and_missing_identity](tests/test_analyze_log.py#L413)
+- [ ] [test_history_correlation_bounded_and_unknown_stage_cannot_finish_save](tests/test_analyze_log.py#L423)
+- [ ] [test_duplicate_json_key_cannot_overwrite_failure_claim](tests/test_analyze_log.py#L438)
+- [ ] [test_cli_markdown_json_outputs_and_cannot_overwrite_original](tests/test_analyze_log.py#L445)
 
 ### tests/test_animals.lua — 21 named tests
 
@@ -1018,7 +1021,7 @@ Inventory: **243 Lua tests and 56 Python test methods**, including parameterized
 - [ ] [animals defer transported and ridden stock and do not perform economic or reproductive updates](tests/test_animals.lua#L276)
 - [ ] [animals return detached scalar rows and refresh without retaining mission state](tests/test_animals.lua#L292)
 
-### tests/test_bootstrap.lua — 12 named tests
+### tests/test_bootstrap.lua — 13 named tests
 
 - [ ] [bootstrap waits for mission mode before starting](tests/test_bootstrap.lua#L88)
 - [ ] [bootstrap initializes once and only scans when requested](tests/test_bootstrap.lua#L101)
@@ -1029,9 +1032,10 @@ Inventory: **243 Lua tests and 56 Python test methods**, including parameterized
 - [ ] [unload preserves another mod's later input wrapper](tests/test_bootstrap.lua#L186)
 - [ ] [failed GUI setup restores previous focus and avoids frame retries](tests/test_bootstrap.lua#L204)
 - [ ] [load completion initializes history before first clock update and preserves native returns](tests/test_bootstrap.lua#L218)
-- [ ] [later loading wrappers survive unload and cannot resurrect the bank observer](tests/test_bootstrap.lua#L245)
-- [ ] [model preparation failures remain explicit instead of looking like ordinary withheld results](tests/test_bootstrap.lua#L260)
-- [ ] [manual expectations do not certify unavailable counts as verified zero](tests/test_bootstrap.lua#L282)
+- [ ] [an undispatched load callback cannot block first-update history with diagnostics off](tests/test_bootstrap.lua#L244)
+- [ ] [later loading wrappers survive unload and cannot resurrect the bank observer](tests/test_bootstrap.lua#L264)
+- [ ] [model preparation failures remain explicit instead of looking like ordinary withheld results](tests/test_bootstrap.lua#L279)
+- [ ] [manual expectations do not certify unavailable counts as verified zero](tests/test_bootstrap.lua#L301)
 
 ### tests/test_collector_diagnostics.lua — 6 named tests
 
@@ -1079,7 +1083,7 @@ Inventory: **243 Lua tests and 56 Python test methods**, including parameterized
 - [ ] [failed capture-end logging and abandoned missions never stall later automatic captures](tests/test_diagnostics.lua#L126)
 - [ ] [pure validation probes run in host without touching game globals](tests/test_diagnostics.lua#L141)
 
-### tests/test_finance.lua — 16 named tests
+### tests/test_finance.lua — 18 named tests
 
 - [ ] [finance preserves raw signed categories and separates retained buckets without inferred periods](tests/test_finance.lua#L35)
 - [ ] [finance does not treat empty missing or zero-padded maps as completed zero-activity months](tests/test_finance.lua#L54)
@@ -1097,6 +1101,8 @@ Inventory: **243 Lua tests and 56 Python test methods**, including parameterized
 - [ ] [finance classifies live MoneyType only by exact runtime identity and isolates interest](tests/test_finance.lua#L208)
 - [ ] [finance MoneyType classification rejects guessed fields unknown values and conflicting identities](tests/test_finance.lua#L227)
 - [ ] [finance MoneyType same-policy aliases coalesce and custom equality cannot invent a match](tests/test_finance.lua#L246)
+- [ ] [finance property income keeps observed signed amounts without verifying retained periods](tests/test_finance.lua#L257)
+- [ ] [finance property income matches only an unambiguous exact native identity](tests/test_finance.lua#L273)
 
 ### tests/test_history.lua — 17 named tests
 
@@ -1137,7 +1143,7 @@ Inventory: **243 Lua tests and 56 Python test methods**, including parameterized
 - [ ] [withheld models never claim executed scoring or supported seasonality](tests/test_history_diagnostics.lua#L385)
 - [ ] [teardown proves owned restoration while preserving newer wrappers](tests/test_history_diagnostics.lua#L409)
 
-### tests/test_history_runtime.lua — 18 named tests
+### tests/test_history_runtime.lua — 20 named tests
 
 - [ ] [money wrapper preserves exact native execution and nil returns](tests/test_history_runtime.lua#L68)
 - [ ] [nested native loan money call is recorded once as financing](tests/test_history_runtime.lua#L78)
@@ -1157,6 +1163,8 @@ Inventory: **243 Lua tests and 56 Python test methods**, including parameterized
 - [ ] [day-length setting change invalidates earlier comparable history](tests/test_history_runtime.lua#L246)
 - [ ] [late resume does not silently relax the exact calendar anchor](tests/test_history_runtime.lua#L260)
 - [ ] [native transaction observations drive a complete model and survive save reload](tests/test_history_runtime.lua#L273)
+- [ ] [documented property income reconciles a 652 receipt and preserves refund gross direction](tests/test_history_runtime.lua#L328)
+- [ ] [property mapping does not relabel earlier unknown activity or accept conflicting aliases](tests/test_history_runtime.lua#L382)
 
 ### tests/test_inventory.lua — 20 named tests
 
@@ -1199,7 +1207,7 @@ Inventory: **243 Lua tests and 56 Python test methods**, including parameterized
 - [ ] [buildings return detached scalar data and do not retain stale values](tests/test_property.lua#L158)
 - [ ] [buildings contain invalid custom names and identifiers instead of leaking references](tests/test_property.lua#L178)
 
-### tests/test_report.lua — 18 named tests
+### tests/test_report.lua — 19 named tests
 
 - [ ] [report uses active farm, game date and native currency/area formatting](tests/test_report.lua#L52)
 - [ ] [report distinguishes verified zero, unavailable and known partial totals](tests/test_report.lua#L65)
@@ -1214,11 +1222,12 @@ Inventory: **243 Lua tests and 56 Python test methods**, including parameterized
 - [ ] [goods show native quantities and container ownership without adding inventory money](tests/test_report.lua#L290)
 - [ ] [missing buildings and goods remain unavailable while verified empty buildings show zero](tests/test_report.lua#L311)
 - [ ] [large stored-goods reports preserve every location within page limits](tests/test_report.lua#L324)
-- [ ] [overflow across otherwise finite asset sections is unavailable](tests/test_report.lua#L339)
-- [ ] [bale report preserves current contents, fermentation and unavailable virtual quantities](tests/test_report.lua#L346)
-- [ ] [livestock reference values stay separate from covered assets and retain native condition](tests/test_report.lua#L367)
-- [ ] [livestock empty supported data and absent coverage never look identical](tests/test_report.lua#L388)
-- [ ] [large livestock reports retain every group without overflowing page lines](tests/test_report.lua#L400)
+- [ ] [report pagination never gives a trailing separator its own empty page](tests/test_report.lua#L339)
+- [ ] [overflow across otherwise finite asset sections is unavailable](tests/test_report.lua#L368)
+- [ ] [bale report preserves current contents, fermentation and unavailable virtual quantities](tests/test_report.lua#L375)
+- [ ] [livestock reference values stay separate from covered assets and retain native condition](tests/test_report.lua#L396)
+- [ ] [livestock empty supported data and absent coverage never look identical](tests/test_report.lua#L417)
+- [ ] [large livestock reports retain every group without overflowing page lines](tests/test_report.lua#L429)
 
 ### tests/test_stored_objects.lua — 16 named tests
 
@@ -1291,7 +1300,7 @@ Inventory: **243 Lua tests and 56 Python test methods**, including parameterized
 - [ ] [unavailable collateral figures are not resurrected from stale numbers](tests/test_underwriting.lua#L331)
 - [ ] [conflicting duplicate rows never choose a financial winner](tests/test_underwriting.lua#L340)
 
-### tests/test_validation.lua — 10 named tests
+### tests/test_validation.lua — 11 named tests
 
 - [ ] [snapshot invariants accept valid partial evidence without claiming complete underwriting](tests/test_validation.lua#L18)
 - [ ] [independent asset sums catch duplicate identifiers incorrect subtotals and leased valuation](tests/test_validation.lua#L25)
@@ -1301,8 +1310,9 @@ Inventory: **243 Lua tests and 56 Python test methods**, including parameterized
 - [ ] [fabricated eligible result without dated history fails independent model gate](tests/test_validation.lua#L64)
 - [ ] [snapshot delta logs added and removed assets without inventing a sale amount](tests/test_validation.lua#L72)
 - [ ] [report pages verify physical line limits but cannot prove visual clipping](tests/test_validation.lua#L80)
-- [ ] [unknown farm identity is unavailable while a malformed positive fraction is a failure](tests/test_validation.lua#L87)
-- [ ] [native category delta comparison discloses sign uncertainty and catches magnitude mismatches](tests/test_validation.lua#L94)
+- [ ] [independent page validation catches empty separator-only pages within the line limit](tests/test_validation.lua#L87)
+- [ ] [unknown farm identity is unavailable while a malformed positive fraction is a failure](tests/test_validation.lua#L99)
+- [ ] [native category delta comparison discloses sign uncertainty and catches magnitude mismatches](tests/test_validation.lua#L106)
 
 <!-- LOCAL_TEST_CHECKLIST_END -->
 

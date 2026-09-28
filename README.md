@@ -1,8 +1,10 @@
-# Lizard Bank 0.0.7 — validation build
+# Lizard Bank 0.0.8 — validation build
 
 A single-player FS25 farm financial report with retained game records, ongoing cash-flow history, seasonal cash scenarios and an explainable creditworthiness model. Asset coverage includes cash, native debt, owned farmland, equipment, buildings, stored-goods quantities and livestock.
 
 **Audit reset: all earlier in-game success reports are treated as unverified.** This release adds structured validation throughout the existing financial pipeline. It observes money movements and writes its own history alongside the normal game save. It does not change money, debt or ownership, or issue loans. Debug logging starts automatically in this validation package; `lbDebug off` disables it.
+
+Version 0.0.8 addresses the [September 27 log findings](docs/log-review-2026-09-27.md): exact recurring property-income classification, blank trailing report pages, a history-start fallback blocked by an undispatched callback, and an analyzer false alarm for an absent first-use history file. The tested log was 0.0.6; these fixes still need Windows confirmation. Native loan-hook and loose-bale enumeration support remain unresolved on that setup.
 
 Start with [test.md](test.md) for the complete ordered test run, all **190 validation scenarios**, detailed category/boundary subcases, a code/resource map and the named local-test inventory. [docs/VALIDATION_MATRIX.md](docs/VALIDATION_MATRIX.md) retains the scenario reference. The catalog covers the explicitly listed current contracts; it cannot prove every unknown map/mod combination. **A clean log is not an automatic pass:** missing gameplay paths remain NOT_EXERCISED, unavailable values stay unavailable, and truncated logs remain incomplete.
 

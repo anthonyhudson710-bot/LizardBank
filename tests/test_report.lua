@@ -336,6 +336,35 @@ test("large stored-goods reports preserve every location within page limits", fu
     end
 end)
 
+test("report pagination never gives a trailing separator its own empty page", function()
+    -- Vary inventory length across several page boundaries. In the captured
+    -- Windows report, a final separator became an empty Stored goods page.
+    for size = 1, 35 do
+        local data = snapshot()
+        data.inventory = {status = "available", sourceCount = size, zeroCount = 0,
+            unknownCount = 0, excludedCount = 0, items = {}}
+        for index = 1, size do
+            data.inventory.items[index] = {location = "Bay" .. string.format("%03d", index),
+                fillTypeTitle = "Cargo" .. string.format("%03d", index), quantity = index,
+                quantityStatus = "available", unit = "l", ownership = "owned", kind = "storage"}
+        end
+        local pages = BankReport.buildPages(data, i18n)
+        local report = joined(pages)
+        for _, page in ipairs(pages) do
+            assert(page.text:find("%S"), "Blank-only page: " .. page.title .. " with " .. size .. " inventory rows")
+            local _, newlines = page.text:gsub("\n", "")
+            assertTrue(newlines + 1 <= BankReport.LINES_PER_PAGE)
+        end
+        for index = 1, size do
+            local marker = "Cargo" .. string.format("%03d", index) .. ":"
+            local first = report:find(marker, 1, true)
+            assert(first, "Pagination lost " .. marker)
+            assertFalse(report:find(marker, first + #marker, true) ~= nil)
+            assertContains(report, "Location: Bay" .. string.format("%03d", index) .. " | Container: Owned")
+        end
+    end
+end)
+
 test("overflow across otherwise finite asset sections is unavailable", function()
     local data = snapshot()
     data.land.totalValue = 1e308
