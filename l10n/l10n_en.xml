@@ -8,6 +8,22 @@
         <text name="lb_farmland" text="Owned farmland" />
         <text name="lb_equipment" text="Equipment and implements" />
         <text name="lb_buildings" text="Owned buildings and placeables" />
+        <text name="lb_animals" text="Livestock" />
+        <text name="lb_animalCounts" text="Husbandries checked: %s | Animal groups: %s | Known animals: %s" />
+        <text name="lb_animalUnknown" text="Groups with unknown count: %s | Unvalued groups: %s" />
+        <text name="lb_animalValue" text="Known animal reference value (separate): %s" />
+        <text name="lb_animalItem" text="%s | Count: %s" />
+        <text name="lb_animalLocation" text="Husbandry: %s" />
+        <text name="lb_animalSubtype" text="Subtype: %s" />
+        <text name="lb_animalCondition" text="Age: %s months | Health: %s | Reproduction: %s" />
+        <text name="lb_animalDetail" text="Native quote per animal: %s | Group reference value: %s" />
+        <text name="lb_animalQuoteBasis" text="Native quote times count; no additional fee or transport adjustment is applied." />
+        <text name="lb_animalBasis" text="Animal values are shown separately and are not added to covered assets." />
+        <text name="lb_animalOverlap" text="Loaded livestock trailer quotes include animal value; modded quotes can vary." />
+        <text name="lb_animalMissing" text="Transported animals, ridden horses and unsupported animal systems are omitted." />
+        <text name="lb_animalMetadata" text="Age and reproduction remain unavailable until their native units are verified." />
+        <text name="lb_animalsUnavailable" text="Livestock coverage is unavailable or incomplete. Zero must not be assumed." />
+        <text name="lb_noAnimals" text="No animals found in the supported owned husbandries checked." />
         <text name="lb_inventory" text="Stored goods and supplies" />
         <text name="lb_basis" text="How to read this report" />
         <text name="lb_issues" text="Coverage issues" />
@@ -80,7 +96,7 @@
         <text name="lb_basisBuildingSale" text="Building value does not guarantee a sale is permitted or that proceeds match." />
         <text name="lb_basisQuote" text="Sale location, condition changes and other mods may change the final proceeds." />
         <text name="lb_basisExclusions" text="Leased, borrowed and unidentified ownership are excluded from owned assets." />
-        <text name="lb_basisMissing" text="Not separately valued: inventories, animals, crops and timber." />
+        <text name="lb_basisMissing" text="Not separately valued: inventories, standing crops and timber." />
         <text name="lb_basisDebt" text="External financing and other liabilities are not included in native debt." />
         <text name="lb_basisSubtotal" text="Known covered assets sum available cash, land, owned equipment and buildings." />
         <text name="lb_basisUnknown" text="Unavailable values are omitted from subtotals; a verified zero is shown as zero." />

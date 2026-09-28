@@ -1,6 +1,6 @@
 # Snapshot sources and evidence
 
-This file separates published FS25 evidence from compatibility candidates. On 2026-09-27 the user confirmed that v0.0.1 and v0.0.2 worked. The first log identifies FS25 1.23.1.0; the second shows Arkansas 4X loading. These confirm the reported overall results, not which getter/fallback supplied each value; no complete diagnostic trace or per-case result was retained. Local injected tests validate collector behavior, not engine compatibility. The v0.0.3 additions await Windows verification.
+This file separates published FS25 evidence from compatibility candidates. The user has reported success through v0.0.3; [validation history](VALIDATION.md) records the evidence and its limits. The first log identifies FS25 1.23.1.0; the second shows Arkansas 4X loading. These confirm overall reported results, not which getter/fallback supplied each value. Local injected tests validate collector behavior, not engine compatibility. The v0.0.4 additions await Windows verification.
 
 | Input | Read path | Evidence and meaning |
 | --- | --- | --- |
@@ -17,15 +17,17 @@ This file separates published FS25 evidence from compatibility candidates. On 20
 | Vehicle ownership | `getOwnerFarmId()`, then `getPropertyState()` / `propertyState` | Owner must match the active farm exactly. FS25 `VehiclePropertyState.OWNED`, `.LEASED`, `.MISSION` decide classification; numeric constants are never assumed. |
 | Equipment value | `vehicle:getSellPrice()` | Published FS25 engine quote; called once per owned item. Specializations/mods may include cargo. The report retains the quote intact and never adds a separate cargo valuation. No depreciation formula is reimplemented. |
 
-Known pallet markers (`isPallet`, `spec_pallet`), big bags (`spec_bigBag`), and train-system vehicles are excluded from equipment. The FS25 VehicleSystem source explicitly distinguishes pallets, big bags, and trains. Custom objects that hide their native classification need Windows compatibility investigation. Unknown owners are omitted with a coverage issue; unknown property states are listed without a valuation. Other farms' known assets are not listed.
+Known pallet markers (`isPallet`, `spec_pallet`), big bags (`spec_bigBag`), train-system vehicles and ridden animals (`spec_rideable`) are excluded from equipment. The FS25 VehicleSystem source explicitly distinguishes pallets, big bags, and trains. Native riding temporarily represents a horse as an owned vehicle; this does not establish an equipment sale value. Custom objects that hide their native classification need Windows compatibility investigation. Unknown owners are omitted with a coverage issue; unknown property states are listed without a valuation. Other farms' known assets are not listed.
 
 Section status is `available`, `partial`, or `unavailable`. Cash/debt use `available` or `unavailable`. An available section means its supported reads completed, not that it covers all farm wealth. Partial sums include known values only. A sum with no verified values is unavailable, except when enumeration verifies that the supported collection is empty. No snapshot holds references to mission/farm/vehicle objects. Failures are isolated by accessor, record, and section.
 
-`BankDataSource.capture(context)` accepts a table keyed by engine global names for local tests. Without a context, it reads the actual engine globals, including `g_fillTypeManager`, `FillType`, and `Bale` for quantities. The result has `schemaVersion = 2` and plain serializable tables: `farm`, `capturedAt`, `cash`, `debt`, `land`, `equipment`, `buildings`, `inventory`, `issues`, `capabilities`, and `gameVersion`. Version 0.0.3 extends inventory rows additively with object counts and fermentation metadata. Capability values are scalar and diagnostic; missing APIs do not become zero-valued financial facts.
+`BankDataSource.capture(context)` accepts a table keyed by engine global names for local tests. Without a context, it reads the actual engine globals, including `g_fillTypeManager`, `FillType`, and `Bale` for quantities. The result has `schemaVersion = 3` and plain serializable tables: `farm`, `capturedAt`, `cash`, `debt`, `land`, `equipment`, `buildings`, `inventory`, `animals`, `issues`, `capabilities`, and `gameVersion`. Version 0.0.4 adds the separate livestock section. Capability values are scalar and diagnostic; missing APIs do not become zero-valued financial facts.
 
 The added modules are isolated collection sections. [Building sources](property-sources.md) document monetary value versus sale eligibility and temporary refunds. [Inventory sources](inventory-sources.md) document strict storage attribution, quantities, deduplication, and exclusions. Inventory quantities never contribute separate monetary value to the asset subtotal.
 
 [Stored-object sources](stored-object-sources.md) document physical bales, readable stored counterparts, and explicit unknown virtual quantities. Native bale-handler proxy units are excluded to avoid counting the same object again as machine material.
+
+[Animal sources](animal-sources.md) document husbandry ownership, animal groups, native reference values and condition. Animal reference values remain separate from covered assets. Transported animals and ridden horses are outside this livestock collector.
 
 ## Primary references inspected
 

@@ -290,3 +290,52 @@ test("bale report preserves current contents, fermentation and unavailable virtu
     data.inventory.items[1].fermentationProgress = 1.5
     assertContains(joined(BankReport.buildPages(data, i18n)), "Fermenting; progress unavailable")
 end)
+
+test("livestock reference values stay separate from covered assets and retain native condition", function()
+    local data = snapshot()
+    data.animals = {status = "partial", ownedHusbandryCount = 1, clusterCount = 2, totalCount = 12,
+        totalValue = 900, unknownCountCount = 1, unknownValueCount = 1, items = {
+            {name = "Holstein", location = "North barn", count = 12, ageMonths = 24,
+                healthPercent = 80, reproductionPercent = 0, unitValue = 75, value = 900, subtypeKey = "COW_HOLSTEIN"},
+            {name = "Mod sheep", location = "North barn"}
+        }}
+    local report = joined(BankReport.buildPages(data, i18n))
+    assertContains(report, "Known animals: 12")
+    assertContains(report, "Holstein | Count: 12")
+    assertContains(report, "Age: 24 months | Health: 80.0% | Reproduction: 0.0%")
+    assertContains(report, "Mod sheep | Count: Unavailable")
+    assertContains(report, "Known animal reference value (separate): $900")
+    assertContains(report, "Group reference value: Unavailable")
+    assertContains(report, "Native quote per animal: $75 | Group reference value: $900")
+    assertContains(report, "Subtype: COW_HOLSTEIN")
+    assertContains(report, "including cash (partial): $350")
+    assertContains(report, "not added to covered assets")
+end)
+
+test("livestock empty supported data and absent coverage never look identical", function()
+    local data = snapshot()
+    local report = joined(BankReport.buildPages(data, i18n))
+    assertContains(report, "Known animal reference value (separate): Unavailable")
+    assertFalse(report:find("No animals found", 1, true) ~= nil)
+    data.animals = {status = "available", ownedHusbandryCount = 1, clusterCount = 0,
+        totalCount = 0, totalValue = 0, unknownCountCount = 0, unknownValueCount = 0, items = {}}
+    report = joined(BankReport.buildPages(data, i18n))
+    assertContains(report, "Known animal reference value (separate): $0")
+    assertContains(report, "No animals found")
+end)
+
+test("large livestock reports retain every group without overflowing page lines", function()
+    local data = snapshot()
+    data.animals = {status = "partial", items = {}}
+    for index = 1, 100 do
+        data.animals.items[index] = {name = "Animal group " .. index, location = "Husbandry " .. index,
+            count = 5, healthPercent = math.huge, reproductionPercent = -1}
+    end
+    local pages = BankReport.buildPages(data, i18n)
+    assertContains(joined(pages), "Animal group 100 | Count: 5")
+    assertContains(joined(pages), "Health: Unavailable | Reproduction: Unavailable")
+    for _, page in ipairs(pages) do
+        local _, count = page.text:gsub("\n", "")
+        assertTrue(count + 1 <= BankReport.LINES_PER_PAGE)
+    end
+end)

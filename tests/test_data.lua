@@ -1,5 +1,6 @@
 -- Run from the repository root: lua tests/test_data.lua
 dofile("scripts/BankPropertyDataSource.lua")
+dofile("scripts/BankAnimalDataSource.lua")
 dofile("scripts/BankStoredObjectDataSource.lua")
 dofile("scripts/BankInventoryDataSource.lua")
 dofile("scripts/BankDataSource.lua")
@@ -126,6 +127,19 @@ test("pallets and big bags are excluded from equipment", function()
     equal(snapshot.equipment.ownedValue, 0)
     equal(snapshot.equipment.excludedCount, 2)
     equal(#snapshot.equipment.items, 0)
+end)
+
+test("ridden horses are disclosed and never valued as ordinary equipment", function()
+    local context = fixture()
+    local horse = vehicle("horse", 11, 50000)
+    horse.spec_rideable = {}
+    horse.getSellPrice = function() error("A ridden animal is not an equipment quote") end
+    context.g_currentMission.vehicleSystem.vehicles = {horse, vehicle("tractor", 11, 1000)}
+    local snapshot = BankDataSource.capture(context)
+    equal(snapshot.equipment.ownedValue, 1000)
+    equal(#snapshot.equipment.items, 1)
+    equal(snapshot.equipment.excludedCount, 1)
+    assert(hasIssue(snapshot, "RIDDEN_ANIMAL_EXCLUDED"))
 end)
 
 test("loaded trailer uses the engine quote exactly once without inventory additions", function()
@@ -255,7 +269,7 @@ test("capture integrates buildings and quantities and isolates a failed added se
     context.g_currentMission.placeableSystem = {placeables = {silo}}
     context.g_fillTypeManager = {getFillTypeByIndex = function() return {name = "WHEAT", title = "Wheat"} end}
     local snapshot = BankDataSource.capture(context)
-    equal(snapshot.schemaVersion, 2)
+    equal(snapshot.schemaVersion, 3)
     equal(snapshot.buildings.totalValue, 300)
     equal(snapshot.inventory.items[1].quantity, 500)
     equal(snapshot.inventory.items[1].location, "Farm silo")
@@ -268,6 +282,29 @@ test("capture integrates buildings and quantities and isolates a failed added se
     equal(result.buildings.status, "partial")
     equal(result.inventory.items[1].quantity, 500)
     assert(hasIssue(result, "SECTION_ERROR"))
+end)
+
+test("capture includes separate husbandry counts quotes and raw diagnostic age", function()
+    local context = fixture()
+    context.g_currentMission.placeableSystem = {placeables = {{
+        spec_husbandryAnimals = {}, getUniqueId = function() return "barn" end,
+        getOwnerFarmId = function() return 7 end, getName = function() return "Cattle barn" end,
+        getMonetaryValue = function() return 1000 end,
+        getClusters = function() return {{health = 90, getNumAnimals = function() return 4 end,
+            getSellPrice = function() return 80 end, getSubTypeIndex = function() return 1 end,
+            getAge = function() return 3 end}} end
+    }}}
+    context.g_currentMission.animalSystem = {getSubTypeByIndex = function() return {name = "COW", fillTypeIndex = 99} end}
+    context.g_fillTypeManager = {getFillTypeByIndex = function() return {title = "Cattle"} end}
+    local snapshot = BankDataSource.capture(context)
+    equal(snapshot.animals.totalCount, 4)
+    equal(snapshot.animals.totalValue, 320)
+    equal(snapshot.animals.items[1].healthPercent, 90)
+    equal(snapshot.animals.items[1].name, "Cattle")
+    equal(snapshot.animals.items[1].ageRaw, 3)
+    equal(snapshot.animals.items[1].ageMonths, nil)
+    equal(snapshot.animals.items[1].reproductionPercent, nil)
+    equal(snapshot.buildings.totalValue, 1000)
 end)
 
 if _G.test == nil then

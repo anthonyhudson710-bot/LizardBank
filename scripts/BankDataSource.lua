@@ -277,6 +277,11 @@ local function readEquipment(snapshot, context)
             if owner ~= snapshot.farm.id then
                 return
             end
+            if vehicle.spec_rideable ~= nil then
+                section.excludedCount = section.excludedCount + 1
+                issue(snapshot, "RIDDEN_ANIMAL_EXCLUDED", "Ridden animal " .. tostring(id or "without ID") .. " is excluded from equipment value and husbandry livestock coverage.")
+                return
+            end
             if vehicle.isPallet == true or vehicle.spec_pallet ~= nil or vehicle.spec_bigBag ~= nil or vehicle.trainSystem ~= nil then
                 section.excludedCount = section.excludedCount + 1
                 return
@@ -352,7 +357,7 @@ end
 function BankDataSource.capture(context)
     context = context or runtimeContext()
     local snapshot = {
-        schemaVersion = 2,
+        schemaVersion = 3,
         farm = {},
         capturedAt = {},
         cash = {status = "unavailable", source = "unavailable"},
@@ -360,6 +365,7 @@ function BankDataSource.capture(context)
         land = {items = {}, unknownValueCount = 0, unknownAreaCount = 0, status = "unavailable"},
         equipment = {items = {}, ownedCount = 0, leasedCount = 0, borrowedCount = 0, excludedCount = 0, unknownValueCount = 0, status = "unavailable"},
         buildings = {items = {}, status = "unavailable"},
+        animals = {items = {}, status = "unavailable"},
         inventory = {items = {}, status = "unavailable"},
         issues = {},
         capabilities = {},
@@ -379,6 +385,7 @@ function BankDataSource.capture(context)
     collect("land", readLand)
     collect("equipment", readEquipment)
     collect("buildings", BankPropertyDataSource.collect)
+    collect("animals", BankAnimalDataSource.collect)
     collect("inventory", BankInventoryDataSource.collect)
     return snapshot
 end

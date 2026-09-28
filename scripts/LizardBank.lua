@@ -1,7 +1,7 @@
 -- Mission lifecycle, native input integration and the shared bank entry point.
 -- Financial collection is deliberately confined to captureSnapshot().
 LizardBank = {
-    VERSION = "0.0.3",
+    VERSION = "0.0.4",
     GUI_NAME = "LizardBank",
     modName = g_currentModName or "FS25_LizardBank",
     modDirectory = g_currentModDirectory or "",

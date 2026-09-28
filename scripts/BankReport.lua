@@ -10,6 +10,22 @@ BankReport.ENGLISH = {
     lb_farmland = "Owned farmland",
     lb_equipment = "Equipment and implements",
     lb_buildings = "Owned buildings and placeables",
+    lb_animals = "Livestock",
+    lb_animalCounts = "Husbandries checked: %s | Animal groups: %s | Known animals: %s",
+    lb_animalUnknown = "Groups with unknown count: %s | Unvalued groups: %s",
+    lb_animalValue = "Known animal reference value (separate): %s",
+    lb_animalItem = "%s | Count: %s",
+    lb_animalLocation = "Husbandry: %s",
+    lb_animalSubtype = "Subtype: %s",
+    lb_animalCondition = "Age: %s months | Health: %s | Reproduction: %s",
+    lb_animalDetail = "Native quote per animal: %s | Group reference value: %s",
+    lb_animalQuoteBasis = "Native quote times count; no additional fee or transport adjustment is applied.",
+    lb_animalBasis = "Animal values are shown separately and are not added to covered assets.",
+    lb_animalOverlap = "Loaded livestock trailer quotes include animal value; modded quotes can vary.",
+    lb_animalMissing = "Transported animals, ridden horses and unsupported animal systems are omitted.",
+    lb_animalMetadata = "Age and reproduction remain unavailable until their native units are verified.",
+    lb_animalsUnavailable = "Livestock coverage is unavailable or incomplete. Zero must not be assumed.",
+    lb_noAnimals = "No animals found in the supported owned husbandries checked.",
     lb_inventory = "Stored goods and supplies",
     lb_basis = "How to read this report",
     lb_issues = "Coverage issues",
@@ -82,7 +98,7 @@ BankReport.ENGLISH = {
     lb_basisBuildingSale = "Building value does not guarantee a sale is permitted or that proceeds match.",
     lb_basisQuote = "Sale location, condition changes and other mods may change the final proceeds.",
     lb_basisExclusions = "Leased, borrowed and unidentified ownership are excluded from owned assets.",
-    lb_basisMissing = "Not separately valued: inventories, animals, crops and timber.",
+    lb_basisMissing = "Not separately valued: inventories, standing crops and timber.",
     lb_basisDebt = "External financing and other liabilities are not included in native debt.",
     lb_basisSubtotal = "Known covered assets sum available cash, land, owned equipment and buildings.",
     lb_basisUnknown = "Unavailable values are omitted from subtotals; a verified zero is shown as zero.",
@@ -193,6 +209,15 @@ function BankReport.buildPages(snapshot, i18n, customEnvironment)
     end
     local function known(value)
         return value ~= nil and clean(value) or t("lb_unavailable")
+    end
+    local function percent(value)
+        if not isNumber(value) or value < 0 or value > 100 then return t("lb_unavailable") end
+        local text = string.format("%.1f", value)
+        if i18n ~= nil and type(i18n.formatNumber) == "function" then
+            local ok, formatted = pcall(i18n.formatNumber, i18n, value, 1)
+            if ok and type(formatted) == "string" then text = formatted end
+        end
+        return text .. "%"
     end
     local function amount(record)
         if type(record) ~= "table" or record.status == "unavailable" then return nil end
@@ -313,6 +338,30 @@ function BankReport.buildPages(snapshot, i18n, customEnvironment)
     end
     section("lb_buildings", buildingLines)
 
+    local animals = snapshot.animals or {}
+    local animalsKnown = animals.status == "available" or animals.status == "partial"
+    local animalItems = animals.items or {}
+    local animalLines = {
+        t("lb_animalCounts", known(animalsKnown and animals.ownedHusbandryCount or nil),
+            known(animalsKnown and animals.clusterCount or nil), known(total(animals, "totalCount"))),
+        t("lb_animalUnknown", known(animalsKnown and animals.unknownCountCount or nil),
+            known(animalsKnown and animals.unknownValueCount or nil)),
+        t("lb_animalValue", money(total(animals, "totalValue"))),
+        t("lb_animalQuoteBasis"), t("lb_animalBasis"), t("lb_animalOverlap"), t("lb_animalMissing"),
+        t("lb_animalMetadata"), ""
+    }
+    if animals.status ~= "available" then animalLines[#animalLines + 1] = t("lb_animalsUnavailable") end
+    if #animalItems == 0 and animals.status == "available" then animalLines[#animalLines + 1] = t("lb_noAnimals") end
+    for _, item in ipairs(animalItems) do
+        animalLines[#animalLines + 1] = t("lb_animalItem", known(item.name), known(item.count))
+        animalLines[#animalLines + 1] = t("lb_animalLocation", known(item.location))
+        if item.subtypeKey ~= nil then animalLines[#animalLines + 1] = t("lb_animalSubtype", known(item.subtypeKey)) end
+        animalLines[#animalLines + 1] = t("lb_animalCondition", known(item.ageMonths), percent(item.healthPercent), percent(item.reproductionPercent))
+        animalLines[#animalLines + 1] = t("lb_animalDetail", money(item.unitValue), money(item.value))
+        animalLines[#animalLines + 1] = ""
+    end
+    section("lb_animals", animalLines)
+
     local inventoryKnown = inventory.status == "available" or inventory.status == "partial"
     local coverageKeys = {available = "lb_coverageAvailable", partial = "lb_coveragePartial"}
     local coverage = inventory.coverage or {}
@@ -359,6 +408,7 @@ function BankReport.buildPages(snapshot, i18n, customEnvironment)
     section("lb_basis", {
         t("lb_basisCash"), t("lb_basisLand"), t("lb_basisVehicle"), t("lb_basisQuote"),
         t("lb_basisBuilding"), t("lb_basisBuildingSale"), t("lb_inventoryBasis"),
+        t("lb_animalBasis"),
         t("lb_basisExclusions"), t("lb_basisMissing"), t("lb_basisDebt"),
         t("lb_basisSubtotal"), t("lb_basisUnknown"), t("lb_basisRefresh"), t("lb_basisNoGrade")
     })

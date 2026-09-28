@@ -1,6 +1,6 @@
-# Windows test: 0.0.3
+# Windows test: 0.0.4
 
-Status: **0.0.1 and 0.0.2 user-confirmed working; 0.0.3 additions pending**.
+Status: **earlier builds user-confirmed through 0.0.3; 0.0.4 additions pending**.
 The confirmations were received on 2026-09-27. The first supplied log identifies
 FS25 1.23.1.0; the second shows Arkansas 4X and no new problem categories in its
 comparison view. Individual test-case results were not retained. The checklist
@@ -8,20 +8,20 @@ below is for this update. Local tests cannot establish in-game behavior.
 
 ## Focus for this update
 
-1. Compare loose bales and bales on a loader with the game's quantities; exclude
-   contract bales and other farms' bales. Loaded bales should appear once, and a
-   loader's bale count must not appear as extra liters.
-2. Deposit/retrieve a bale and pallet at a bale/pallet store, then Refresh.
-   Readable quantities move between the store and physical inventory once.
-   Unsupported virtual entries must show a count and unavailable quantity.
-3. Compare a fermenting wrapped bale before/after fermentation completes.
-   The bank must retain its current fill type until the game actually changes it.
-4. Load and consume a bale in a straw blower. The blower and physical-bale paths
-   must not duplicate its quantity. Test round and square balers if available:
-   the ambiguous round chamber is omitted during discharge; after dropping,
-   Refresh restores its actual quantity. Independent buffer material remains.
-5. Sell/use a bale, Refresh, save/reload, and switch saves. Confirm stock and the
-   original cash, land, equipment, buildings and window behavior remain current.
+1. Compare owned husbandries and their animal groups with the game's animal
+   screen: type, count and health. Age/reproduction are currently unavailable
+   because their native units are unverified. Include an
+   empty husbandry and an unowned one to check empty versus excluded coverage.
+2. Compare native animal reference quotes without additional fee/transport adjustments.
+   Group values should equal native per-animal quote times count. These figures
+   remain separate and never increase the covered-assets subtotal.
+3. Buy/sell animals, then Refresh. Split or merge compatible groups if supported;
+   counts must still reconcile without duplicates. Save/reload and switch saves.
+4. Load animals into a livestock trailer or ride a horse. The livestock section
+   explicitly excludes these cases. A ridden horse must not appear as ordinary
+   equipment. A loaded trailer's native equipment quote can include animals.
+5. Check existing cash, land, equipment, buildings, goods and bale figures, and
+   confirm the window still opens/refreshes/closes normally.
 
 ## Install and record
 
@@ -39,7 +39,7 @@ below is for this update. Local tests cannot establish in-game behavior.
 
 | Check | Expected result | Status |
 | --- | --- | --- |
-| Mod selection | Lizard Bank 0.0.3 and its icon appear; save loads without new errors. | Pending |
+| Mod selection | Lizard Bank 0.0.4 and its icon appear; save loads without new errors. | Pending |
 | Open / close | Right Ctrl+B (remappable Open Lizard Bank action) opens the window; Back/Escape closes it; normal player controls resume. | Pending |
 | Controller | Bind Open Lizard Bank in Controls; navigate controls, change report page, Refresh and close without the mouse. | Pending |
 | Repeated opening | Ten open/close cycles produce no duplicate input callbacks, stuck controls, or extra windows. | Pending |
@@ -50,6 +50,10 @@ below is for this update. Local tests cannot establish in-game behavior.
 | Attached implements | Tractor plus attached implements each appear once; detaching them does not change ownership totals. | Pending |
 | Loaded trailers | Compare empty versus loaded equipment. Included contents are disclosed and are not counted again as separate inventory. | Pending |
 | Buildings | Owned registered placeables appear once with monetary values; missing values remain unavailable and known sale vetoes are disclosed. | Pending |
+| Livestock groups | Owned husbandry groups/counts match the animal screen; missing metadata or values stay unavailable. Empty supported barns show zero. | Pending |
+| Animal condition | Health matches the current game value, including zero. Age/reproduction remain unavailable; optional raw diagnostic readings are not interpreted as percentages or months. | Pending |
+| Animal reference value | Native per-animal quotes times count are shown separately, without additional fee/transport adjustments; they do not increase covered assets. | Pending |
+| Transport and riding | Deferred coverage is explicit; ridden horses are excluded from equipment; loaded trailer quotes retain their contents disclosure. | Pending |
 | Stored goods | Supported storage and fill-unit quantities reconcile, use correct units, and identify the container; leased equipment value is still excluded. | Pending |
 | Physical bales | Owned loose/loaded bales appear once with current quantity and type; contract bales are excluded. | Pending |
 | Object stores | Stored counterparts appear at the store once; unsupported virtual quantities stay unavailable with known object counts. | Pending |
@@ -58,7 +62,7 @@ below is for this update. Local tests cannot establish in-game behavior.
 | Stock transfers | Moving goods between supported containers changes location without duplication; zero and unavailable data remain distinct. | Pending |
 | Removal | Sold buildings and removed containers disappear on Refresh, including their lingering storage registry aliases. | Pending |
 | Refresh | Borrow/repay; buy/sell equipment and land; lease/return equipment. Each deliberate change appears after Refresh. | Pending |
-| Partial coverage | Inventory is quantity-only; unsupported virtual quantities, other stock, animals, standing crop, timber and external finance gaps are visible. No full-net-worth or credit-grade claim. | Pending |
+| Partial coverage | Inventory is quantity-only and livestock reference values are separate; unsupported stock/animals, crops, timber and external finance gaps are visible. No full-net-worth or credit-grade claim. | Pending |
 | Save / reload | Save and reload the same game; report matches current finances and does not contain stale items. | Pending |
 | Second save | Return to the main menu and load another farm without restarting FS25; report reflects that save only, with one working action binding. | Pending |
 | Read-only behavior | Opening or refreshing the report does not move money, change debt/ownership, or add custom savegame files. Normal simulation expenses may continue. | Pending |
