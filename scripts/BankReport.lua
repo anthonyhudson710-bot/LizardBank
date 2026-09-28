@@ -116,11 +116,18 @@ for key, value in pairs(BankFinancialReport.ENGLISH) do BankReport.ENGLISH[key] 
 local function isNumber(value)
     return type(value) == "number" and value == value and value > -math.huge and value < math.huge
 end
+local function diagnosticFormat(method, ok, raw, result)
+    if BankDiagnostics ~= nil and BankDiagnostics.isEnabled() then
+        BankDiagnostics.emit("format.native", {method = method, ok = ok, input = raw,
+            output = type(result) == "string" and result or nil, resultType = type(result)})
+    end
+end
 
 function BankReport.getText(i18n, key, customEnvironment, ...)
     local value
     if i18n ~= nil and type(i18n.getText) == "function" then
         local ok, result = pcall(i18n.getText, i18n, key, customEnvironment)
+        diagnosticFormat("getText:" .. tostring(key), ok, customEnvironment, result)
         if ok and type(result) == "string" and result ~= key and not result:find("Missing", 1, true) then
             value = result
         end
@@ -131,6 +138,7 @@ function BankReport.getText(i18n, key, customEnvironment, ...)
         if ok then
             return formatted
         end
+        diagnosticFormat("translation_format_fallback:" .. tostring(key), false, value, formatted)
         return string.format(BankReport.ENGLISH[key] or key, ...)
     end
     return value
@@ -181,6 +189,7 @@ function BankReport.buildPages(snapshot, i18n, customEnvironment)
         if not isNumber(value) then return t("lb_unavailable") end
         if i18n ~= nil and type(i18n.formatMoney) == "function" then
             local ok, formatted = pcall(i18n.formatMoney, i18n, value, 0, true, false)
+            diagnosticFormat("formatMoney", ok, value, formatted)
             if ok and type(formatted) == "string" then return formatted end
         end
         return string.format("%.0f", value)
@@ -189,6 +198,7 @@ function BankReport.buildPages(snapshot, i18n, customEnvironment)
         if not isNumber(value) then return t("lb_unavailable") end
         if i18n ~= nil and type(i18n.formatArea) == "function" then
             local ok, formatted = pcall(i18n.formatArea, i18n, value, 2)
+            diagnosticFormat("formatArea", ok, value, formatted)
             if ok and type(formatted) == "string" then return formatted end
         end
         return string.format("%.2f ha", value)
@@ -199,11 +209,13 @@ function BankReport.buildPages(snapshot, i18n, customEnvironment)
         end
         if item.unit == "l" and i18n ~= nil and type(i18n.formatVolume) == "function" then
             local ok, formatted = pcall(i18n.formatVolume, i18n, item.quantity, 1)
+            diagnosticFormat("formatVolume", ok, item.quantity, formatted)
             if ok and type(formatted) == "string" then return formatted end
         end
         local number = string.format("%.1f", item.quantity)
         if i18n ~= nil and type(i18n.formatNumber) == "function" then
             local ok, formatted = pcall(i18n.formatNumber, i18n, item.quantity, 1)
+            diagnosticFormat("formatNumber:quantity", ok, item.quantity, formatted)
             if ok and type(formatted) == "string" then number = formatted end
         end
         return number .. " " .. clean(item.unitText or item.unit or t("lb_unavailable"))
@@ -216,6 +228,7 @@ function BankReport.buildPages(snapshot, i18n, customEnvironment)
         local text = string.format("%.1f", value)
         if i18n ~= nil and type(i18n.formatNumber) == "function" then
             local ok, formatted = pcall(i18n.formatNumber, i18n, value, 1)
+            diagnosticFormat("formatNumber:percent", ok, value, formatted)
             if ok and type(formatted) == "string" then text = formatted end
         end
         return text .. "%"
@@ -423,5 +436,13 @@ function BankReport.buildPages(snapshot, i18n, customEnvironment)
     end
     if #issueLines == 0 then issueLines[1] = t("lb_noIssues") end
     section("lb_issues", issueLines)
+    if BankDiagnostics ~= nil and BankDiagnostics.isEnabled() then
+        BankDiagnostics.emit("report.built", {pageCount = #pages, lineLimit = BankReport.LINES_PER_PAGE,
+            columnLimit = BankReport.LINE_COLUMNS, assetSubtotal = partialValue, hasKnownAssets = hasValue,
+            cashIncluded = cash, landIncluded = landValue, equipmentIncluded = vehicleValue, buildingsIncluded = buildingValue,
+            inventoryAdded = false, separateAnimalsAdded = false})
+        BankDiagnostics.check("REPORT_ASSET_SUBTOTAL_BASIS", "PASS", {basis = "available cash + land + owned equipment + buildings only",
+            value = partialValue, oracle = "observed summation operands; not native asset appraisal"})
+    end
     return pages
 end

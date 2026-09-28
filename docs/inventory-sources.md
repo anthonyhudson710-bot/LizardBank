@@ -93,4 +93,6 @@ and output, a loaded trailer, a pallet/big bag, and a leased trailer. Moving a
 known quantity between a trailer and silo must move its observed location
 without duplicating it. Verify empty storage versus missing data, mounted
 saplings, object-storage quantities and omissions, and new snapshots after save/reload.
-The user confirmed v0.0.2 successful; v0.0.3 bale/storage additions remain pending.
+Under the 0.0.6 [audit reset](VALIDATION.md), earlier overall success reports are
+not acceptance evidence; each inventory and bale/storage scenario remains
+unverified until its own evidence is recorded.

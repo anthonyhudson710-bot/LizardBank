@@ -1,8 +1,29 @@
-# Lizard Bank 0.0.5
+# Lizard Bank 0.0.6 — validation build
 
 A single-player FS25 farm financial report with retained game records, ongoing cash-flow history, seasonal cash scenarios and an explainable creditworthiness model. Asset coverage includes cash, native debt, owned farmland, equipment, buildings, stored-goods quantities and livestock.
 
-Earlier builds have user-reported success through v0.0.4. **This release needs Windows verification.** It observes money movements and writes its own history alongside the normal game save. It does not change money, debt or ownership, or issue loans.
+**Audit reset: all earlier in-game success reports are treated as unverified.** This release adds structured validation throughout the existing financial pipeline. It observes money movements and writes its own history alongside the normal game save. It does not change money, debt or ownership, or issue loans. Debug logging starts automatically in this validation package; `lbDebug off` disables it.
+
+The source workspace includes **190 validation scenarios**, detailed subcases and independent-oracle requirements in [docs/VALIDATION_MATRIX.md](docs/VALIDATION_MATRIX.md). The catalog is exhaustive for the explicitly listed current contracts; it cannot prove every unknown map/mod combination. **A clean log is not an automatic pass:** missing gameplay paths remain NOT_EXERCISED, unavailable values stay unavailable, and truncated logs remain incomplete.
+
+## Minimal validation run
+
+1. Install this ZIP and load a disposable copy of an established single-player save. Automatic checkpoints begin after initialization and capture changes, GUI activity, transactions, save/reload and period boundaries. A new save alone cannot exercise assets it does not contain.
+2. Open/refresh/close the bank, change Policy, borrow/repay, sell some produce and buy inputs. Where already available, trade/lease/return equipment and transfer stock. Save normally, wait for completion, reload, then load a second save. The [short Windows route](docs/WINDOWS_TEST.md) covers roughly 10–15 minutes of active play plus loading; larger scenarios are listed separately.
+3. Optionally use `lbMark beforeLoan` / `lbMark afterLoan` for named full checkpoints. `lbValidate final` writes a fresh snapshot, invariant results and coverage summary. `lbExpect cash 123456` compares a native-screen value you checked manually; cash/debt must use unformatted numbers and counts must be whole numbers. Manual observations are labeled user-supplied rather than independently proven.
+4. Exit normally and preserve `log.txt` before another launch overwrites it. In the source workspace run:
+
+   ```sh
+   python3 tools/analyze_log.py /path/to/log.txt --output validation-report.md --json validation-report.json
+   ```
+
+The analyzer separates internal checks, synthetic probes, manual comparisons, transport gaps, failures and unexercised scenarios. It retains failures even if a later observation passes. No log upload occurs automatically.
+
+Logs include raw scalar reads, selected sources, ownership/exclusion decisions, captured items and totals, before/after cash and debt, transaction nesting, save readback, resume anchors, forecast sources, scoring gates/formulas, GUI text, and lifecycle events. This can expose wrong totals and broken assumptions with little manual bookkeeping. It cannot independently verify missing native registries, a truthful manual value, actual visual clipping/controller feel, or an unplayed full seasonal cycle.
+
+Pure ledger/model probes run once in the game's Lua host with **origin=synthetic** and **SYNTHETIC_** check IDs. They touch no mission, time, money or save files and never count as real seasonal/save coverage. Runtime observations use **origin=runtime**. Collection remains observational; debug-only XML readback reads the bank's own sidecar after a save acknowledgement.
+
+For quiet play, use `lbDebug off`. `lbDebug on` enables checkpoints/checks; `lbDebug trace` also logs individual accessor reads; `lbDebug summary` writes coverage. Before rebuilding, defaults and bounded event/byte limits can be edited in `scripts/BankDebugConfig.lua`. Debug captures settle for two seconds and normally occur no faster than every fifteen seconds, with a sixty-second fallback; opening/Refresh/manual commands also capture. Explicit limit notices and a bounded emergency summary reserve prevent silent truncation or unlimited logging. Asset scans add debug overhead on large saves, and the logs contain in-game names and financial figures.
 
 **A new save—and an established save without a verified observed cycle—shows insufficient history.** Native retained records are displayed when readable, but their FS25 dates, padding, ordering and retention window remain unverified. The mod does not turn those unknown slots into invented completed months or an immediate score.
 
@@ -43,12 +64,15 @@ The full test checklist is in `docs/WINDOWS_TEST.md` in the source workspace. Re
 
 ## Optional diagnostics
 
-With the game's developer console enabled:
+With the game's developer console enabled (automatic validation logging does not require it):
 
 - `lbSnapshot` writes a fresh, itemized snapshot and capability information to the game's `log.txt`.
 - `lbOpen` opens the bank as a fallback for testing input bindings.
+- `lbDebug on|trace|off|summary` controls structured validation.
+- `lbValidate [label]` or `lbMark [label]` captures and checks a named checkpoint.
+- `lbExpect cash|debt|landCount|equipmentOwned|animalsCount NUMBER` records a comparison with a manually checked native figure. Cash/debt tolerance follows entered display precision: `1000` allows half a currency unit; `1000.00` allows half a cent. Counts must match exactly; incomplete counts remain unavailable.
 
-Both commands are available only while this mod is active in single-player. The snapshot contains in-game farm/asset names and financial values. No logs are uploaded automatically. The usual log location is `Documents\My Games\FarmingSimulator2025\log.txt`.
+Commands are available only while this mod is active in single-player. The snapshot contains in-game farm/asset names and financial values. No logs are uploaded automatically. The usual log location is `Documents\My Games\FarmingSimulator2025\log.txt`.
 
 ## Development
 
@@ -57,6 +81,7 @@ Run from the source directory:
 ```sh
 python3 tools/validate.py
 lua5.1 tests/run.lua
+python3 -m unittest discover -s tests -p 'test_analyze_log.py'
 python3 tools/build.py
 ```
 

@@ -81,6 +81,11 @@ local function number(value)
 end
 
 function BankFinancialReport.sections(snapshot, t, money, known)
+    if BankDiagnostics ~= nil and BankDiagnostics.isEnabled() then
+        BankDiagnostics.emit("report.finance.begin", {nativeStatus = snapshot.finance and snapshot.finance.status,
+            historyFarmId = snapshot.history and snapshot.history.farmId,
+            modelStatus = snapshot.underwriting and snapshot.underwriting.assessment and snapshot.underwriting.assessment.status})
+    end
     local sections = {}
     local function section(title, lines) sections[#sections + 1] = {title = title, lines = lines} end
     local function decimal(value)
@@ -175,5 +180,8 @@ function BankFinancialReport.sections(snapshot, t, money, known)
         end
     end
     section("lb_forecast", lines)
+    if BankDiagnostics ~= nil and BankDiagnostics.isEnabled() then
+        for _, entry in ipairs(sections) do BankDiagnostics.emit("report.finance.section", {titleKey = entry.title, logicalLines = #entry.lines}) end
+    end
     return sections
 end

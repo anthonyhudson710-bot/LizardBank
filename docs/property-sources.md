@@ -7,8 +7,9 @@ not inspect arbitrary map scene nodes or assume that land access grants ownershi
 ## Official API evidence
 
 The following evidence was checked in GIANTS' FS25 scripting reference, currently
-labelled **Script v1.20.0.0**. Windows runtime verification of this new slice is
-still pending; successful 0.0.1 testing does not verify these additions.
+labelled **Script v1.20.0.0** when inspected. Windows runtime verification remains
+unverified under the 0.0.6 [audit reset](VALIDATION.md); earlier overall reports
+are not acceptance evidence for these paths.
 
 | Input | Source and accounting use |
 | --- | --- |

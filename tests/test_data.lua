@@ -308,6 +308,14 @@ test("capture includes separate husbandry counts quotes and raw diagnostic age",
     equal(snapshot.buildings.totalValue, 1000)
 end)
 
+test("fractional farm identifiers are unavailable rather than attributed as an active farm", function()
+    local context = fixture()
+    context.g_currentMission.getFarmId = function() return 7.5 end
+    local snapshot = BankDataSource.capture(context)
+    equal(snapshot.farm.id, nil)
+    equal(snapshot.cash.status, "unavailable")
+end)
+
 if _G.test == nil then
     print(string.format("Data collector: %d tests passed", count))
 end

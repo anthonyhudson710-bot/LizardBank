@@ -4,6 +4,17 @@ BankHistory.SCHEMA = 1
 BankHistory.MAX_PERIODS = 36
 BankHistory.AMOUNTS = {"operatingRevenue", "operatingExpense", "interestExpense", "capitalInflow", "capitalOutflow", "financingInflow", "financingOutflow", "unclassifiedInflow", "unclassifiedOutflow"}
 
+-- Diagnostics are observational even if a logger is absent, disabled or broken.
+function BankHistory.diagnosticsEnabled()
+    if type(BankDiagnostics) ~= "table" or type(BankDiagnostics.isEnabled) ~= "function" then return false end
+    local ok, enabled = pcall(BankDiagnostics.isEnabled)
+    return ok and enabled == true
+end
+function BankHistory.diagnostic(method, ...)
+    if not BankHistory.diagnosticsEnabled() then return end
+    if type(BankDiagnostics[method]) == "function" then pcall(BankDiagnostics[method], ...) end
+end
+
 local function number(v)
     return type(v) == "number" and v == v and math.abs(v) < 1e15
 end
@@ -27,6 +38,22 @@ local function gap(period, reason)
     period.gaps = period.gaps or {}
     for _, existing in ipairs(period.gaps) do if existing == reason then return end end
     if #period.gaps < 16 then period.gaps[#period.gaps + 1] = reason end
+    BankHistory.diagnostic("emit", "history.gap", {year = period.year, month = period.month, reason = reason,
+        complete = period.complete, reconciled = period.reconciled})
+end
+
+local function periodProof(period, farmId)
+    local proof = {farmId = farmId, year = period.year, month = period.month, openingCash = period.openingCash,
+        closingCash = period.closingCash, complete = period.complete, reconciled = period.reconciled,
+        events = period.events, gapCount = #(period.gaps or {}), startDay = period.startDay, endDay = period.endDay}
+    local expected = period.openingCash
+    for _, key in ipairs(BankHistory.AMOUNTS) do
+        proof[key] = period[key]
+        expected = expected + ((key == "operatingRevenue" or key:find("Inflow", 1, true)) and period[key] or -period[key])
+    end
+    proof.expectedClosingCash = number(expected) and expected or nil
+    proof.difference = number(expected) and expected - period.closingCash or nil
+    return proof
 end
 
 local function newPeriod(stamp, cycle, balance, full)
@@ -69,16 +96,24 @@ function BankHistory.observe(ledger, stamp, cash)
         ledger.periods, ledger.cycle = {}, 0
         ledger.current = newPeriod(stamp, 0, cash, false)
         gap(ledger.current, "Calendar moved backwards; history chain was restarted.")
+        BankHistory.diagnostic("emit", "history.calendar.restart", {farmId = ledger.farmId, reason = "backwards", previousDay = last.day, day = stamp.day, previousPeriod = last.period, period = stamp.period})
     elseif calendarJump then
         -- The same seasonal slot can recur after one or several unobserved
         -- years. Do not compress that absence into an adjacent local cycle.
         ledger.periods, ledger.cycle = {}, 0
         ledger.current = newPeriod(stamp, 0, cash, false)
         gap(ledger.current, "Calendar continuity was lost; history chain was restarted.")
+        BankHistory.diagnostic("emit", "history.calendar.restart", {farmId = ledger.farmId, reason = "unobserved_boundary", previousDay = last.day, day = stamp.day, previousPeriod = last.period, period = stamp.period})
     elseif changedPeriod then
         p.endDay, p.endTime, p.closingCash = last.day, last.dayTime, ledger.balance
         if not adjacent then gap(p, "Unobserved seasonal boundary or skipped game days.") end
         ledger.periods[#ledger.periods + 1] = p
+        if BankHistory.diagnosticsEnabled() then
+            local proof = periodProof(p, ledger.farmId)
+            BankHistory.diagnostic("emit", "history.period.close", proof)
+            BankHistory.diagnostic("check", "HISTORY_PERIOD_RECONCILIATION",
+                proof.difference == nil and "UNAVAILABLE" or (math.abs(proof.difference) <= 0.01 and p.reconciled and "PASS" or "WARN"), proof)
+        end
         if #ledger.periods > BankHistory.MAX_PERIODS then table.remove(ledger.periods, 1) end
         if stamp.period <= last.period then ledger.cycle = ledger.cycle + 1 end
         ledger.current = newPeriod(stamp, ledger.cycle, cash, adjacent and stamp.dayTime <= 60000)
@@ -131,6 +166,9 @@ function BankHistory.record(ledger, stamp, before, after, category, classificati
     if number(entry[direction] + amount) then entry[direction] = entry[direction] + amount
     else gap(p, "Category total exceeds supported numeric range.") end
     ledger.balance, p.closingCash = after, after
+    BankHistory.diagnostic("emit", "history.ledger.record", {farmId = ledger.farmId, year = p.year, month = p.month,
+        category = category, classification = classification, field = field, amount = amount,
+        cashBefore = before, cashAfter = after, fieldTotal = p[field], events = p.events})
     if not number(p[field]) then gap(p, "Amount exceeds supported numeric range.") end
 end
 
@@ -147,9 +185,41 @@ function BankHistory.resume(saved, farmId, stamp, cash)
         or math.abs(saved.last.dayTime - stamp.dayTime) > 1 or math.abs(saved.balance - cash) > 0.01 then
         local fresh = BankHistory.new(farmId, stamp, cash)
         BankHistory.markGap(fresh, "Saved history anchor does not match this save; prior continuity is unverified.")
+        if BankHistory.diagnosticsEnabled() then
+            local anchor = type(saved) == "table" and type(saved.last) == "table" and saved.last or {}
+            local now = type(stamp) == "table" and stamp or {}
+            local evidence = {farmId = farmId, savedFarmId = type(saved) == "table" and saved.farmId or nil,
+                resumed = false, savedDay = anchor.day, day = now.day, savedPeriod = anchor.period, period = now.period,
+                savedDayTime = anchor.dayTime, dayTime = now.dayTime, savedDaysPerPeriod = anchor.daysPerPeriod,
+                daysPerPeriod = now.daysPerPeriod, savedCash = type(saved) == "table" and saved.balance or nil, cash = cash,
+                basis = "Exact schema/farm/calendar/day-length/cash anchor comparison; mismatch restarts history"}
+            -- Invalid input may contain arbitrary tables; never forward them as
+            -- live references through the diagnostic-only rejection path.
+            for key, value in pairs(evidence) do
+                if type(value) ~= "string" and type(value) ~= "boolean" and not number(value) then evidence[key] = nil end
+            end
+            local reasons = {}
+            if type(saved) ~= "table" or saved.schemaVersion ~= BankHistory.SCHEMA then reasons[#reasons + 1] = "schema_or_saved_record" end
+            if type(saved) ~= "table" or saved.farmId ~= farmId then reasons[#reasons + 1] = "farm_identity" end
+            if not calendar(anchor) or not calendar(now) then reasons[#reasons + 1] = "calendar_unavailable"
+            else
+                if anchor.day ~= now.day or anchor.period ~= now.period then reasons[#reasons + 1] = "calendar_day_or_period" end
+                if anchor.daysPerPeriod ~= now.daysPerPeriod then reasons[#reasons + 1] = "days_per_period" end
+                if math.abs(anchor.dayTime - now.dayTime) > 1 then reasons[#reasons + 1] = "time_anchor" end
+            end
+            if not number(evidence.savedCash) or not number(cash) or math.abs(evidence.savedCash - cash) > 0.01 then reasons[#reasons + 1] = "cash_anchor" end
+            if #reasons == 0 then reasons[1] = "ledger_structure_or_cycle" end
+            evidence.rejectionReasons = reasons
+            BankHistory.diagnostic("emit", "history.resume", evidence)
+            BankHistory.diagnostic("check", "HISTORY_RESUME_ANCHOR", "WARN", evidence)
+        end
         return fresh, false
     end
     local result = copy(saved)
+    local evidence = {farmId = farmId, resumed = true, day = stamp.day, period = stamp.period, dayTime = stamp.dayTime,
+        daysPerPeriod = stamp.daysPerPeriod, cash = cash, retainedPeriods = #saved.periods, cycle = saved.cycle}
+    BankHistory.diagnostic("emit", "history.resume", evidence)
+    BankHistory.diagnostic("check", "HISTORY_RESUME_ANCHOR", "PASS", evidence)
     return result, true
 end
 

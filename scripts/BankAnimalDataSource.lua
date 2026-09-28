@@ -3,6 +3,40 @@
 -- Confirmed APIs and deliberately unsupported fields: docs/animal-sources.md.
 BankAnimalDataSource = {}
 
+-- Opt-in evidence only. No extra game accessors or live references in events.
+local function diagnosticScalar(value)
+    if type(value) == "string" or type(value) == "boolean" then return value end
+    if type(value) == "number" and value == value and math.abs(value) < math.huge then return value end
+    return nil
+end
+
+local function diagnosticRead(name, ok, value, reason)
+    if BankDiagnostics ~= nil and BankDiagnostics.isEnabled() then
+        BankDiagnostics.read("animals", name, ok, value, {reason = reason})
+    end
+end
+
+local function diagnosticField(object, name)
+    local value = object[name]
+    diagnosticRead(name, true, value, "raw_field")
+    return value
+end
+
+local function diagnosticDecision(checkId, outcome, id, value, reason, expected)
+    if BankDiagnostics ~= nil and BankDiagnostics.isEnabled() then
+        BankDiagnostics.check(checkId, outcome, {section = "animals", id = diagnosticScalar(id),
+            value = diagnosticScalar(value), valueType = type(value), reason = reason,
+            expected = diagnosticScalar(expected)})
+    end
+end
+
+local function diagnosticBoundary(stage, name, ok, status, detail)
+    if BankDiagnostics ~= nil and BankDiagnostics.isEnabled() then
+        BankDiagnostics.emit("collector." .. stage, {section = "animals", name = name,
+            ok = ok, status = status, detail = diagnosticScalar(detail)})
+    end
+end
+
 local function finite(value)
     return type(value) == "number" and value == value and value ~= math.huge and value ~= -math.huge
 end
@@ -22,6 +56,7 @@ end
 
 local function issue(snapshot, code, detail)
     snapshot.issues[#snapshot.issues + 1] = {code = code, detail = tostring(detail)}
+    diagnosticBoundary("issue", code, false, "reported", detail)
 end
 
 local function partial(snapshot, code, detail)
@@ -30,8 +65,12 @@ local function partial(snapshot, code, detail)
 end
 
 local function call(snapshot, object, name, ...)
-    if type(object) ~= "table" or type(object[name]) ~= "function" then return nil end
+    if type(object) ~= "table" or type(object[name]) ~= "function" then
+        diagnosticRead(name, false, nil, "missing_accessor")
+        return nil
+    end
     local ok, result = pcall(object[name], object, ...)
+    diagnosticRead(name, ok, result, ok and "accessor_return" or "accessor_error")
     if not ok then
         partial(snapshot, "ANIMAL_ACCESSOR_ERROR", name .. ": " .. tostring(result))
         return nil
@@ -40,7 +79,7 @@ local function call(snapshot, object, name, ...)
 end
 
 local function removing(object)
-    return object.markedForDeletion == true or object.isDeleting == true or object.isDeleted == true
+    return diagnosticField(object, "markedForDeletion") == true or diagnosticField(object, "isDeleting") == true or diagnosticField(object, "isDeleted") == true
 end
 
 local QUOTE_SOURCE = "cluster:getSellPrice() per animal x verified count; native reference quote, no additional fee/transport calculation"
@@ -73,6 +112,7 @@ local function collectCluster(snapshot, context, cluster, location)
     else
         -- PlaceableHusbandryAnimals:getNumOfAnimals reads this same native field.
         count = cluster.numAnimals
+        diagnosticRead("cluster.numAnimals", true, count, "raw_count_fallback")
         capabilities.animalCountFieldCount = capabilities.animalCountFieldCount + 1
     end
     if nonnegative(count) and count == math.floor(count) then
@@ -80,6 +120,7 @@ local function collectCluster(snapshot, context, cluster, location)
     else
         partial(snapshot, "ANIMAL_COUNT_UNAVAILABLE", location .. ": animal group has no valid current whole-animal count.")
     end
+    diagnosticDecision("ANIMAL_COUNT", item.count ~= nil and "PASS" or "UNAVAILABLE", item.id, count, "Whole nonnegative animal count.")
 
     local unitValue = call(snapshot, cluster, "getSellPrice")
     if nonnegative(unitValue) then
@@ -92,15 +133,19 @@ local function collectCluster(snapshot, context, cluster, location)
     if item.value == nil then
         partial(snapshot, "ANIMAL_VALUE_UNAVAILABLE", location .. ": native per-animal quote or counted group value is unavailable.")
     end
+    diagnosticDecision("ANIMAL_VALUE", item.value ~= nil and "PASS" or "UNAVAILABLE", item.id, item.value, QUOTE_SOURCE, item.unitValue)
 
     -- GIANTS formats cluster.health directly as a percent in husbandry info.
-    if nonnegative(cluster.health) and cluster.health <= 100 then
+    local rawHealth = cluster.health
+    diagnosticRead("cluster.health", true, rawHealth, "raw_field")
+    if nonnegative(rawHealth) and cluster.health <= 100 then
         item.healthPercent = cluster.health
         capabilities.animalHealthAvailableCount = capabilities.animalHealthAvailableCount + 1
     else
         capabilities.animalHealthUnavailableCount = capabilities.animalHealthUnavailableCount + 1
         partial(snapshot, "ANIMAL_HEALTH_UNAVAILABLE", location .. ": current group health is unavailable.")
     end
+    diagnosticDecision("ANIMAL_HEALTH", item.healthPercent ~= nil and "PASS" or "UNAVAILABLE", item.id, item.healthPercent, "Verified raw percent scale.")
 
     -- These observations are diagnostics only. The published specialization
     -- docs do not establish the units of age or reproduction; never guess.
@@ -113,7 +158,9 @@ local function collectCluster(snapshot, context, cluster, location)
             if capabilities.animalAgeRawExample == nil then capabilities.animalAgeRawExample = rawAge end
         end
     end
-    if finite(cluster.reproduction) then
+    local rawReproduction = cluster.reproduction
+    diagnosticRead("cluster.reproduction", true, rawReproduction, "unverified_raw_diagnostic")
+    if finite(rawReproduction) then
         capabilities.animalReproductionFieldCount = capabilities.animalReproductionFieldCount + 1
         item.reproductionRaw = cluster.reproduction
         item.reproductionSource = "cluster.reproduction (unit and meaning unverified; diagnostic only)"
@@ -121,6 +168,8 @@ local function collectCluster(snapshot, context, cluster, location)
             capabilities.animalReproductionRawExample = cluster.reproduction
         end
     end
+    diagnosticDecision("ANIMAL_OPTIONAL_UNITS", "UNAVAILABLE", item.id, item.ageRaw,
+        "Age and reproduction remain raw diagnostics, not confirmed units.", item.reproductionRaw)
 
     -- getName is an individual horse name where supported, not a breed label.
     local individualName = text(call(snapshot, cluster, "getName"))
@@ -153,6 +202,7 @@ local function collectCluster(snapshot, context, cluster, location)
 end
 
 function BankAnimalDataSource.collect(snapshot, context)
+    diagnosticBoundary("enter", "collect", true)
     local section = {
         items = {}, ownedHusbandryCount = 0, clusterCount = 0,
         unknownCountCount = 0, unknownValueCount = 0, excludedCount = 0,
@@ -178,6 +228,7 @@ function BankAnimalDataSource.collect(snapshot, context)
     local farmId = snapshot.farm and snapshot.farm.id
     if not finite(farmId) or farmId <= 0 or type(system) ~= "table" then
         issue(snapshot, "ANIMALS_UNAVAILABLE", "Active farm or registered placeable system is unavailable.")
+        diagnosticBoundary("exit", "collect", true, section.status)
         return
     end
     local placeables = system.placeables
@@ -191,10 +242,12 @@ function BankAnimalDataSource.collect(snapshot, context)
     end
     if type(placeables) ~= "table" then
         issue(snapshot, "ANIMALS_UNAVAILABLE", "Registered placeable enumeration is unavailable.")
+        diagnosticBoundary("exit", "collect", true, section.status)
         return
     end
 
     section.status = "available"
+    diagnosticRead(capabilities.animalEnumeration, true, placeables, "selected_registry")
     local seenHusbandries, seenIds, seenClusters = {}, {}, {}
     local enumerationComplete = true
     for _, placeable in pairs(placeables) do
@@ -202,12 +255,15 @@ function BankAnimalDataSource.collect(snapshot, context)
             if type(placeable) ~= "table" then error("Invalid registered placeable record") end
             if type(placeable.spec_husbandryAnimals) ~= "table" then return end
             if seenHusbandries[placeable] then
+                diagnosticDecision("ANIMAL_HUSBANDRY_DEDUP", "PASS", nil, true, "Duplicate husbandry reference excluded.")
                 capabilities.animalDuplicateHusbandryCount = capabilities.animalDuplicateHusbandryCount + 1
                 return
             end
             seenHusbandries[placeable] = true
             local id = identifier(call(snapshot, placeable, "getUniqueId"))
             local owner = call(snapshot, placeable, "getOwnerFarmId")
+            diagnosticDecision("ANIMAL_OWNER", finite(owner) and "PASS" or "UNAVAILABLE", id, owner,
+                owner == farmId and "Exact owned husbandry." or "Excluded: owner mismatch or unavailable.", farmId)
             if not finite(owner) then
                 enumerationComplete = false
                 section.excludedCount = section.excludedCount + 1
@@ -222,6 +278,7 @@ function BankAnimalDataSource.collect(snapshot, context)
                 return
             end
             if id ~= nil and seenIds[id] then
+                diagnosticDecision("ANIMAL_HUSBANDRY_DEDUP", "PASS", id, true, "Duplicate husbandry ID excluded.")
                 capabilities.animalDuplicateHusbandryCount = capabilities.animalDuplicateHusbandryCount + 1
                 return
             end
@@ -238,6 +295,7 @@ function BankAnimalDataSource.collect(snapshot, context)
                 local clusterOk, clusterFailure = pcall(function()
                     if type(cluster) ~= "table" then error("Invalid animal cluster record") end
                     if seenClusters[cluster] then
+                        diagnosticDecision("ANIMAL_CLUSTER_DEDUP", "PASS", location, true, "Duplicate cluster reference excluded.")
                         capabilities.animalDuplicateClusterCount = capabilities.animalDuplicateClusterCount + 1
                         return
                     end
@@ -250,12 +308,14 @@ function BankAnimalDataSource.collect(snapshot, context)
                     collectCluster(snapshot, context, cluster, location)
                 end)
                 if not clusterOk then
+                    diagnosticBoundary("recordError", "cluster", false, "partial", clusterFailure)
                     enumerationComplete = false
                     unknownRow(snapshot, location, "ANIMAL_CLUSTER_ERROR", clusterFailure)
                 end
             end
         end)
         if not ok then
+            diagnosticBoundary("recordError", "husbandry", false, "partial", failure)
             enumerationComplete = false
             section.excludedCount = section.excludedCount + 1
             partial(snapshot, "ANIMAL_HUSBANDRY_ERROR", failure)
@@ -297,4 +357,5 @@ function BankAnimalDataSource.collect(snapshot, context)
         end
         return false
     end)
+    diagnosticBoundary("exit", "collect", true, section.status)
 end

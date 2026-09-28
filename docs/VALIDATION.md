@@ -1,51 +1,95 @@
-# Build verification
+# Validation evidence: audit reset
 
-Version: **0.0.5**. Checked on **2026-09-27** in the macOS development workspace.
+Version under validation: **0.0.6**, the diagnostic release for the complete 0.0.5
+feature set. Audit reset recorded **2026-09-27**.
 
-| Check | Result | What this establishes |
+**Earlier user reports of overall success through 0.0.5 are not relied upon as
+acceptance evidence. Windows correctness is UNVERIFIED until the relevant
+scenario has recorded evidence.** This changes how evidence is assessed; it does
+not assert that previous feedback was inaccurate or that every feature failed.
+
+| Evidence category | Current status | What can be established |
 | --- | --- | --- |
-| Lua logic and lifecycle tests | 196 passed, 0 failed | Prior asset/report regression coverage plus retained finances, exact money-type classification, gross flow separation, evidence gates, model arithmetic, seasonal matching, XML round trips, invalid anchors, money/save/load hooks and a complete transaction-to-assessment fixture |
-| Lua syntax | All fourteen runtime files parse in Lua 5.1.5 | Standard Lua syntax compatibility, not GIANTS runtime behavior |
-| XML and resource validation | Passed | Well-formed XML, English localization references, exact-case resource paths and declared callbacks |
-| Mod icon | Passed | 512 x 512 DXT5 DDS with all ten mipmap levels |
-| Packaged ZIP | Passed | Archive integrity, root modDesc.xml and allowlisted runtime files |
-| GIANTS TestRunner | Pending | Tool is not installed in this workspace |
-| Windows FS25 0.0.5 | User-reported success | Overall confirmation received on 2026-09-27; individual Finance, persistence, seasonal-cycle and scoring results were not supplied |
-| Windows FS25 through 0.0.4 | User-reported success | Earlier overall confirmations; individual checklist results were not supplied |
+| Local Lua tests | **239 passed, 0 failed — Lua 5.1.5** | Only contracts actually exercised with explicit game stubs; no automatic engine pass |
+| Local diagnostic/analyzer tests | **29 Python tests passed; Lua diagnostic fixtures included above** | Instrumentation/parser behavior for supplied inputs; not correctness of an unseen Windows log |
+| Lua syntax for every shipped runtime file | **19 of 19 passed** | Standard Lua 5.1 syntax, not availability/order of GIANTS globals |
+| XML, localization, callback and exact-case resource validation | **Passed tools/validate.py** | Structural integrity of the shipped package |
+| DDS icon and deterministic ZIP/hash | **Passed; two byte-identical builds, all 25 entries match source** | Icon/archive format and reproducible artifact identity |
+| GIANTS TestRunner | **NOT RUN — unavailable in this workspace** | Native/static package checks still outstanding; not economic correctness |
+| Windows FS25 0.0.6 short route | **NOT EXERCISED** | Baseline behavior only for the recorded map/mods/actions |
+| Windows extended seasonal qualification | **NOT EXERCISED** | Eligible history, seasonal repeat and scoring in the real engine, only after the actual run |
+| Prior overall runtime reports, 0.0.1–0.0.5 | **UNVERIFIED for acceptance after audit reset** | Historical user feedback only; no missing scenario result is inferred |
+| Every scenario in VALIDATION_MATRIX.md | **NOT EXERCISED unless individually recorded otherwise** | Evidence scoped to that scenario, input and test environment |
 
-Tests use an isolated Lua 5.1.5 executable built from the official source archive. Its SHA-256 was checked against the [Lua download page](https://www.lua.org/ftp/). The interpreter is not shipped inside the mod.
+Local verification completed **2026-09-27**. Catalog/matrix parity is **190 unique
+IDs**, and every runtime Lua file is listed in the manifest. An actual
+`BankDiagnostics.lua` serializer → Python analyzer fixture round trip also
+completed with transport marked CAPTURED and all 190 scenarios still
+NOT_EXERCISED; this was local synthetic evidence, not a Windows session.
 
-The documented FS25 APIs and compatibility candidates are distinguished in [data-sources.md](data-sources.md) and [gui-sources.md](gui-sources.md). Reading an API reference is not an in-game verification.
+Artifact: `dist/FS25_LizardBank.zip`, **115,910 bytes**, version **0.0.6**.
+SHA256: `7f24e175ffe9f0663ec6af1815d578a0d8ccca23d26ca20f494c7ba3f347cffb`.
+The ZIP has `modDesc.xml` at its root and excludes tests, tools, development
+documents and user logs. `git diff --check` passed.
 
-The v0.0.5 integration fixture starts with insufficient history, observes an
-initial partial period and twelve complete seasonal periods, records operating
-receipts, operating payments, interest, borrowing and repayment through the
-runtime wrappers, and produces the expected seasonal scenario and score. It
-resumes the identical result from its saved ledger, then verifies that an
-unexplained money mutation withholds both forecast and assessment. Separate XML
-fixtures exercise native-style typed storage, finite validation, malformed data,
-handle cleanup and unconfirmed write results. These are explicit game stubs,
-not recordings from the GIANTS engine.
+## Evidence boundaries
 
-The early load-completion hook is tested before a simulated first clock update,
-including return preservation and cooperative removal. Its availability and
-ordering in FS25 1.23.1.0 remain unverified. Save callback presence and a successful
-XML write are distinguished from completion of the whole native save. Retained
-Finance slot dates/signs/window/padding remain unverified and are excluded from
-normalized model input. See [history sources](history-sources.md),
-[finance sources](finance-sources.md) and [model policy](underwriting-model.md).
+The [validation matrix](VALIDATION_MATRIX.md) inventories 190 scenarios with stable
+IDs, expected oracles, required setup and log evidence. The corresponding
+[BankValidationCatalog.lua](../scripts/BankValidationCatalog.lua) declares scenarios,
+not successful outcomes. The [Windows route](WINDOWS_TEST.md) minimizes repetitive
+manual recording while preserving independent native-screen comparisons.
 
-The user confirmed on 2026-09-27 that **v0.0.1 worked**; the supplied log identifies FS25 **1.23.1.0**. This is recorded as user confirmation of the overall first-build outcome, without inventing individual test results or which accessor fallback was used. The original local suite passed 30 tests.
+An automatic check can establish that a reported subtotal equals its captured
+items, that a known owner matches the farm, or that a ledger reconciles. It cannot
+prove that the native registry contains every asset, that a supplied UI expectation
+was entered correctly, or that an unobserved gameplay path works. A PASS for an
+internal invariant is not a blanket feature or scenario PASS. No captured path
+means NOT_EXERCISED; unavailable native data remains UNAVAILABLE, even where its
+graceful handling passed a local fixture.
 
-The user also confirmed **v0.0.2 successful** on 2026-09-27. The supplied second log excerpt shows Arkansas 4X loading and a comparison with zero new problem categories. It does not contain an itemized bank diagnostic or prove individual cases. The v0.0.2 local suite passed 68 tests.
+Local fixtures use explicit game substitutes. Their twelve-period integration
+path, XML round trips, failed accessors, category identities, extreme values,
+hook return preservation and malformed inputs verify deterministic logic only
+where assertions exist. They are not recordings from the GIANTS engine and do
+not establish native finance layout, callback timing, input focus, temporary-save
+promotion or a real twelve-period observation. A related test filename in the
+matrix identifies where to inspect coverage, not proof all variants passed.
 
-After the v0.0.3 package was announced, the user said "succes next". This was treated as overall confirmation of that build, with the interpretation stated to the user. No additional log or individual case results were provided. Its local suite passed 88 tests.
+The save callback's successful sidecar write does not establish whole-save
+completion. Clean saved/read farm, cash, debt and calendar anchors plus the final
+file and real reload are required. Retained native Finance dates/order/window/
+padding remain unverified and excluded from the observed model input. Optional
+fallbacks and raw animal units retain their explicit uncertainty.
 
-The user explicitly confirmed **v0.0.4 successful** with "success now what" on 2026-09-27. No new diagnostic log or individual checklist results accompanied this confirmation. [WINDOWS_TEST.md](WINDOWS_TEST.md) retains the scenarios for regression testing; unreported cases are not individually marked passed.
+Documentation sources remain recorded in [data-sources.md](data-sources.md),
+[gui-sources.md](gui-sources.md), [finance-sources.md](finance-sources.md) and
+[history-sources.md](history-sources.md). Published API references support
+implementation decisions; they are not runtime validation.
 
-The user explicitly confirmed **v0.0.5 successful** with "success now what" on
-2026-09-27 after receiving the full financial-history, tracking, seasonal-scenario
-and creditworthiness build. This records overall runtime acceptance. No new
-diagnostic snapshot or individual test results accompanied the confirmation, so
-it does not independently establish the native retained-history window, exact
-save/load hook timing, or completion of the twelve-period eligibility test.
+## Historical feedback retained without acceptance inference
+
+Earlier conversation feedback reported overall success for 0.0.1, 0.0.2, 0.0.3,
+0.0.4 and 0.0.5. Earlier supplied log material identified FS25 1.23.1.0 and an
+Arkansas 4X load. Those reports did not supply an itemized record for every
+financial, ownership, persistence, seasonal or controller scenario.
+
+For this audit, none of those broad confirmations is carried forward as a
+scenario PASS or a complete-release acceptance. Historic local test counts and
+earlier successful packaging are likewise not substituted for the current
+0.0.6 run. New evidence should preserve artifact hash, game version, map/mod
+context, settings, original log, named checkpoints, independent measurements and
+the precise matrix IDs actually exercised.
+
+## Result entry format
+
+Record: scenario ID; artifact SHA256; game/map/mod context; checkpoint/session;
+setup/actions; independent expected value or invariant; actual result; outcome;
+evidence location; unresolved limitation. Several subcases in one row may be
+PARTIAL in the human record; keep unresolved machine scenarios NOT_EXERCISED
+until assessed rather than promoting a group from one successful example.
+
+Diagnostic truncation, missing sessions, fixture-only evidence and absent native
+capabilities belong in the acceptance record. A review may accept a clearly
+scoped result, but it must identify unverified cases and must not describe a
+10–15 minute baseline as universal financial or engine validation.

@@ -2,6 +2,34 @@
 -- Sources and their verification limits are recorded in docs/data-sources.md.
 BankDataSource = {}
 
+-- Opt-in evidence only. No extra game accessors or live references in events.
+local function diagnosticScalar(value)
+    if type(value) == "string" or type(value) == "boolean" then return value end
+    if type(value) == "number" and value == value and math.abs(value) < math.huge then return value end
+    return nil
+end
+
+local function diagnosticRead(name, ok, value, reason)
+    if BankDiagnostics ~= nil and BankDiagnostics.isEnabled() then
+        BankDiagnostics.read("assets", name, ok, value, {reason = reason})
+    end
+end
+
+local function diagnosticDecision(checkId, outcome, id, value, reason, expected)
+    if BankDiagnostics ~= nil and BankDiagnostics.isEnabled() then
+        BankDiagnostics.check(checkId, outcome, {section = "assets", id = diagnosticScalar(id),
+            value = diagnosticScalar(value), valueType = type(value), reason = reason,
+            expected = diagnosticScalar(expected)})
+    end
+end
+
+local function diagnosticBoundary(stage, name, ok, status, detail)
+    if BankDiagnostics ~= nil and BankDiagnostics.isEnabled() then
+        BankDiagnostics.emit("collector." .. stage, {section = "assets", name = name,
+            ok = ok, status = status, detail = diagnosticScalar(detail)})
+    end
+end
+
 local function finite(value)
     return type(value) == "number" and value == value and value ~= math.huge and value ~= -math.huge
 end
@@ -12,13 +40,16 @@ end
 
 local function issue(snapshot, code, detail)
     snapshot.issues[#snapshot.issues + 1] = {code = code, detail = tostring(detail)}
+    diagnosticBoundary("issue", code, false, "reported", detail)
 end
 
 local function call(snapshot, object, name, ...)
     if object == nil or type(object[name]) ~= "function" then
+        diagnosticRead(name, false, nil, "missing_accessor")
         return nil
     end
     local ok, value = pcall(object[name], object, ...)
+    diagnosticRead(name, ok, value, ok and "accessor_return" or "accessor_error")
     if not ok then
         issue(snapshot, "ACCESSOR_ERROR", name .. ": " .. tostring(value))
         return nil
@@ -28,6 +59,7 @@ end
 
 local function fieldNumber(object, name, nonnegative)
     local value = object and object[name]
+    diagnosticRead(name, true, value, "raw_field")
     if finite(value) and (not nonnegative or value >= 0) then
         return value
     end
@@ -55,12 +87,18 @@ end
 local function readFinance(snapshot, farm, getter, field, allowNegative)
     local result = {status = "unavailable", source = "unavailable"}
     snapshot.capabilities["farm_" .. getter] = farm ~= nil and type(farm[getter]) == "function"
-    snapshot.capabilities["farm_" .. field .. "Type"] = type(farm and farm[field])
+    local rawField = farm and farm[field]
+    snapshot.capabilities["farm_" .. field .. "Type"] = type(rawField)
+    diagnosticRead("farm." .. field, true, rawField, "raw_field_already_read_for_capability")
     local value = call(snapshot, farm, getter)
+    diagnosticDecision(field == "money" and "CASH_GETTER_FIELD_MATCH" or "DEBT_GETTER_FIELD_MATCH",
+        finite(value) and finite(rawField) and (math.abs(value - rawField) <= 0.01 and "PASS" or "FAIL") or "UNAVAILABLE",
+        getter, value, "Getter versus the existing raw field read; disagreement requires source reconciliation.", rawField)
     if finite(value) and (allowNegative or value >= 0) then
         result.value = value
         result.status = "available"
         result.source = "farm:" .. getter .. "() [compatibility candidate]"
+        diagnosticDecision("FINANCIAL_VALUE_SOURCE", "PASS", field, value, result.source)
         return result
     end
     value = fieldNumber(farm, field, not allowNegative)
@@ -68,6 +106,7 @@ local function readFinance(snapshot, farm, getter, field, allowNegative)
         result.value = value
         result.status = "available"
         result.source = "farm." .. field .. " [compatibility candidate]"
+        diagnosticDecision("FINANCIAL_VALUE_SOURCE", "WARN", field, value, result.source)
     else
         issue(snapshot, string.upper(field) .. "_UNAVAILABLE", "No finite " .. field .. " value returned by the farm getter or scalar field.")
     end
@@ -83,12 +122,14 @@ local function readFarm(snapshot, context)
     else
         snapshot.capabilities.farmIdSource = "mission:getFarmId()"
     end
+    diagnosticRead(snapshot.capabilities.farmIdSource, true, farmId, "resolved_farm_candidate")
     local constants = context.FarmManager or {}
-    if not finite(farmId) or farmId <= 0 or farmId == constants.SPECTATOR_FARM_ID or farmId == constants.INVALID_FARM_ID then
+    if not finite(farmId) or farmId <= 0 or farmId ~= math.floor(farmId) or farmId == constants.SPECTATOR_FARM_ID or farmId == constants.INVALID_FARM_ID then
         issue(snapshot, "FARM_UNAVAILABLE", "The current player has no resolved active farm.")
         return
     end
     snapshot.farm.id = farmId
+    diagnosticDecision("ACTIVE_FARM", "PASS", farmId, farmId, snapshot.capabilities.farmIdSource)
     local farm = call(snapshot, context.g_farmManager, "getFarmById", farmId)
     if type(farm) ~= "table" then
         issue(snapshot, "FARM_UNAVAILABLE", "The active farm could not be read from the farm manager.")
@@ -166,10 +207,13 @@ local function readLand(snapshot, context)
                 error("Farmland identifier is unavailable")
             end
             if seen[id] then
+                diagnosticDecision("LAND_DEDUP", "PASS", id, true, "Duplicate parcel ID excluded.")
                 return
             end
             seen[id] = true
             local owner = call(snapshot, manager, "getFarmlandOwner", id)
+            diagnosticDecision("LAND_OWNER", finite(owner) and "PASS" or "UNAVAILABLE", id, owner,
+                owner == snapshot.farm.id and "Included: exact ownership." or "Excluded: ownership does not match or is unavailable.", snapshot.farm.id)
             if not finite(owner) then
                 section.status = "partial"
                 issue(snapshot, "LAND_OWNER_UNAVAILABLE", "Parcel " .. tostring(id) .. " omitted because its owner is unavailable.")
@@ -186,6 +230,8 @@ local function readLand(snapshot, context)
                 source = "farmland.price (current game-configured parcel price)"
             }
             section.items[#section.items + 1] = item
+            diagnosticDecision("LAND_VALUE", item.value ~= nil and "PASS" or "UNAVAILABLE", id, item.value, item.source)
+            diagnosticDecision("LAND_AREA", item.areaHa ~= nil and "PASS" or "UNAVAILABLE", id, item.areaHa, "farmland.areaInHa")
             if item.value ~= nil then
                 valueSum, valueCount = valueSum + item.value, valueCount + 1
             else
@@ -200,6 +246,7 @@ local function readLand(snapshot, context)
             end
         end)
         if not ok then
+            diagnosticBoundary("recordError", "land", false, "partial", failure)
             section.status = "partial"
             issue(snapshot, "LAND_RECORD_ERROR", failure)
         end
@@ -257,12 +304,14 @@ local function readEquipment(snapshot, context)
                 error("Invalid registered vehicle record")
             end
             if seenObjects[vehicle] then
+                diagnosticDecision("EQUIPMENT_DEDUP", "PASS", nil, true, "Duplicate object reference excluded; no extra ID read.")
                 return
             end
             seenObjects[vehicle] = true
             local id = call(snapshot, vehicle, "getUniqueId") or vehicle.uniqueId
             if identifier(id) then
                 if seenIds[id] then
+                    diagnosticDecision("EQUIPMENT_DEDUP", "PASS", id, true, "Duplicate vehicle ID excluded.")
                     return
                 end
                 seenIds[id] = true
@@ -270,6 +319,8 @@ local function readEquipment(snapshot, context)
                 id = nil
             end
             local owner = call(snapshot, vehicle, "getOwnerFarmId")
+            diagnosticDecision("EQUIPMENT_OWNER", finite(owner) and "PASS" or "UNAVAILABLE", id, owner,
+                owner == snapshot.farm.id and "Included: exact ownership." or "Excluded: owner mismatch or unavailable.", snapshot.farm.id)
             if not finite(owner) then
                 section.status = "partial"
                 section.excludedCount = section.excludedCount + 1
@@ -285,6 +336,7 @@ local function readEquipment(snapshot, context)
                 return
             end
             if vehicle.isPallet == true or vehicle.spec_pallet ~= nil or vehicle.spec_bigBag ~= nil or vehicle.trainSystem ~= nil then
+                diagnosticDecision("EQUIPMENT_EXCLUSION", "PASS", id, true, "Pallet, big bag or train excluded from equipment.")
                 section.excludedCount = section.excludedCount + 1
                 return
             end
@@ -300,6 +352,7 @@ local function readEquipment(snapshot, context)
             local state = call(snapshot, vehicle, "getPropertyState")
             if state == nil then
                 state = vehicle.propertyState
+                diagnosticRead("vehicle.propertyState", true, state, "raw_field_fallback")
             end
             local ownership = "unknown"
             if state ~= nil and state == states.OWNED then
@@ -316,11 +369,15 @@ local function readEquipment(snapshot, context)
                 source = "excluded from owned equipment subtotal",
                 quoteIncludesContents = true
             }
+            diagnosticDecision("EQUIPMENT_PROPERTY_STATE", ownership ~= "unknown" and "PASS" or "UNAVAILABLE",
+                id, state, ownership)
             section.items[#section.items + 1] = item
             if ownership == "owned" then
                 section.ownedCount = section.ownedCount + 1
                 item.source = "vehicle:getSellPrice() (engine quote; may include contents)"
                 local price = call(snapshot, vehicle, "getSellPrice")
+                diagnosticDecision("EQUIPMENT_VALUE", finite(price) and price >= 0 and "PASS" or "UNAVAILABLE",
+                    id, price, item.source)
                 if finite(price) and price >= 0 then
                     item.value = price
                     valueSum, valueCount = valueSum + price, valueCount + 1
@@ -342,6 +399,7 @@ local function readEquipment(snapshot, context)
             end
         end)
         if not ok then
+            diagnosticBoundary("recordError", "equipment", false, "partial", failure)
             section.status = "partial"
             section.excludedCount = section.excludedCount + 1
             issue(snapshot, "VEHICLE_RECORD_ERROR", failure)
@@ -357,6 +415,7 @@ local function readEquipment(snapshot, context)
 end
 
 function BankDataSource.capture(context)
+    diagnosticBoundary("enter", "capture", true)
     context = context or runtimeContext()
     local snapshot = {
         schemaVersion = 4,
@@ -375,6 +434,7 @@ function BankDataSource.capture(context)
         gameVersion = tostring(context.g_gameVersionDisplay or context.g_gameVersion or "unavailable")
     }
     local function collect(name, callback)
+        diagnosticBoundary("enter", name, true)
         local ok, failure = pcall(callback, snapshot, context)
         if not ok then
             if snapshot[name] ~= nil then
@@ -382,6 +442,7 @@ function BankDataSource.capture(context)
             end
             issue(snapshot, "SECTION_ERROR", name .. ": " .. tostring(failure))
         end
+        diagnosticBoundary(ok and "exit" or "error", name, ok, snapshot[name] and snapshot[name].status, failure)
     end
     collect("farm", readFarm)
     collect("capturedAt", readDate)
@@ -391,5 +452,6 @@ function BankDataSource.capture(context)
     collect("animals", BankAnimalDataSource.collect)
     collect("inventory", BankInventoryDataSource.collect)
     collect("finance", BankFinanceDataSource.collect)
+    diagnosticBoundary("exit", "capture", true, "captured")
     return snapshot
 end

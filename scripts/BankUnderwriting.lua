@@ -223,6 +223,69 @@ local function component(assessment, name, value, status, weight, factor, formul
     return item
 end
 
+local function diagnoseResult(result, farmId, historyFarmId)
+    -- A failing or absent logger cannot affect a deterministic model result.
+    if type(BankDiagnostics) ~= "table" or type(BankDiagnostics.isEnabled) ~= "function" then return end
+    local enabled, value = pcall(BankDiagnostics.isEnabled)
+    if not enabled or value ~= true then return end
+    local function log(method, ...)
+        if type(BankDiagnostics[method]) == "function" then pcall(BankDiagnostics[method], ...) end
+    end
+    local assessment, evidence, forecast = result.assessment, result.history, result.forecast
+    local codes = {}
+    for _, reason in ipairs(assessment.withheldReasons) do codes[#codes + 1] = reason.code end
+    local gate = {modelVersion = result.modelVersion, mode = result.mode, status = assessment.status,
+        farmId = finite(farmId) and farmId or nil, historyFarmId = finite(historyFarmId) and historyFarmId or nil,
+        withheldReasonCodes = codes, completePeriodCount = evidence.completePeriodCount,
+        observedPeriodCount = evidence.observedPeriodCount, requiredPeriodCount = evidence.requiredPeriodCount,
+        thresholds = copyScalars(assessment.thresholds), score = assessment.score, provisional = assessment.provisional,
+        cash = assessment.cash, nativeDebt = assessment.nativeDebt, basis = "Implemented evidence gates, not repayment validation"}
+    log("emit", "underwriting.gate", gate)
+    log("check", "UNDERWRITING_EVIDENCE_GATE", assessment.status == "available" and "PASS" or "UNAVAILABLE", gate)
+    for _, period in ipairs(evidence.periods or {}) do log("emit", "underwriting.evidence.period", copyScalars(period)) end
+    if evidence.totals then log("emit", "underwriting.evidence.totals", copyScalars(evidence.totals)) end
+    local weighted, weights = 0, 0
+    for _, item in ipairs(assessment.components) do
+        log("emit", "underwriting.component", copyScalars(item))
+        if finite(item.points) then weighted = weighted + item.points end
+        if finite(item.weight) then weights = weights + item.weight end
+    end
+    if assessment.status == "available" then
+        local rounded = math.floor(weighted + 0.5)
+        log("check", "UNDERWRITING_SCORE_ARITHMETIC", rounded == assessment.score and weights == 100 and "PASS" or "FAIL",
+            {weightedPoints = weighted, roundedScore = rounded, emittedScore = assessment.score, totalWeight = weights,
+                scope = "Arithmetic of declared simulation components only"})
+    end
+    local proof = {status = forecast.status, withheldReason = forecast.withheldReason, periodCount = #(forecast.periods or {}),
+        basis = "Each scenario amount repeats the matching observed seasonal period; no forecast accuracy is established"}
+    if forecast.status == "available" then
+        local indexed = {}
+        for _, period in ipairs(evidence.periods) do indexed[period.year * 12 + period.month] = period end
+        local valid, sources = #forecast.periods == 12, {}
+        for _, period in ipairs(forecast.periods) do
+            local source = indexed[period.sourceYear * 12 + period.sourceMonth]
+            local matched = source ~= nil and source.status == "available" and source.month == period.month
+                and period.operatingRevenue == source.operatingRevenue and period.operatingExpense == source.operatingExpense
+                and period.interestExpense == source.interestExpense
+                and period.cashBeforePrincipal == source.operatingRevenue - source.operatingExpense - source.interestExpense
+            valid = valid and matched
+            local row = copyScalars(period); row.sourceMatched = matched
+            sources[#sources + 1] = row
+        end
+        proof.sources, proof.allSourcesMatched = sources, valid
+        log("emit", "underwriting.forecast", proof)
+        log("check", "UNDERWRITING_FORECAST_SOURCES", valid and "PASS" or "FAIL", proof)
+    else
+        log("emit", "underwriting.forecast", proof)
+        log("check", "UNDERWRITING_FORECAST_SOURCES", "UNAVAILABLE", proof)
+    end
+end
+
+local function diagnosed(result, farmId, historyFarmId)
+    pcall(diagnoseResult, result, farmId, historyFarmId)
+    return result
+end
+
 function BankUnderwriting.prepare(snapshot, history, options)
     snapshot, history, options = tableOrEmpty(snapshot), tableOrEmpty(history), tableOrEmpty(options)
     local mode = MODES[options.mode] and options.mode or "standard"
@@ -285,14 +348,14 @@ function BankUnderwriting.prepare(snapshot, history, options)
     if cash == nil then reason(withheld, "CASH_UNAVAILABLE", "Current cash is not verified.") end
     if debt == nil then reason(withheld, "NATIVE_DEBT_UNAVAILABLE", "Current native debt is not verified.") end
     local totals = evidence.totals
-    if totals == nil then return result end
+    if totals == nil then return diagnosed(result, farmId, history.farmId) end
     if totals.operatingRevenue == 0 and totals.operatingExpense == 0 and totals.interestExpense == 0 then
         reason(withheld, "NO_OPERATING_ACTIVITY", "No operating activity is recorded; startup or dormant status is not a failed credit grade.")
     end
     if debt ~= nil and debt > 0 and totals.interestExpense == 0 then
         reason(withheld, "NATIVE_INTEREST_UNOBSERVED", "Native debt exists but its interest cost has not been observed in the assessment window.")
     end
-    if #withheld > 0 then return result end
+    if #withheld > 0 then return diagnosed(result, farmId, history.farmId) end
 
     local margin, marginFactor
     if totals.operatingRevenue > 0 then
@@ -341,7 +404,7 @@ function BankUnderwriting.prepare(snapshot, history, options)
             reason(withheld, "ASSESSMENT_OVERFLOW", "A ratio exceeds the supported numeric range.")
         else score = score + item.points end
     end
-    if #withheld > 0 then return result end
+    if #withheld > 0 then return diagnosed(result, farmId, history.farmId) end
     assessment.status = "available"
     assessment.score = math.floor(score + 0.5)
     assessment.band = assessment.score >= 75 and "favorable" or (assessment.score >= 50 and "guarded" or "strained")
@@ -353,5 +416,5 @@ function BankUnderwriting.prepare(snapshot, history, options)
     if cash < 0 then reason(assessment.reasons, "NEGATIVE_CASH", "Current cash is below zero.") end
     if debt > 0 and interestCoverage ~= nil and interestCoverage < 1 then reason(assessment.reasons, "INTEREST_NOT_COVERED", "Recorded operating cash before interest is less than recorded interest expense.") end
     reason(assessment.reasons, "PRINCIPAL_CAPACITY_UNPROVEN", "Principal repayment capacity is not established without a repayment schedule and verified additional obligations.")
-    return result
+    return diagnosed(result, farmId, history.farmId)
 end

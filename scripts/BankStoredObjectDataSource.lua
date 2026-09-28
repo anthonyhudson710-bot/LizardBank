@@ -2,6 +2,40 @@
 -- Missing virtual quantity APIs remain explicit gaps, never inferred fields.
 BankStoredObjectDataSource = {}
 
+-- Opt-in evidence only. No extra game accessors or live references in events.
+local function diagnosticScalar(value)
+    if type(value) == "string" or type(value) == "boolean" then return value end
+    if type(value) == "number" and value == value and math.abs(value) < math.huge then return value end
+    return nil
+end
+
+local function diagnosticRead(name, ok, value, reason)
+    if BankDiagnostics ~= nil and BankDiagnostics.isEnabled() then
+        BankDiagnostics.read("storedObjects", name, ok, value, {reason = reason})
+    end
+end
+
+local function diagnosticField(object, name)
+    local value = object[name]
+    diagnosticRead(name, true, value, "raw_field")
+    return value
+end
+
+local function diagnosticDecision(checkId, outcome, id, value, reason, expected)
+    if BankDiagnostics ~= nil and BankDiagnostics.isEnabled() then
+        BankDiagnostics.check(checkId, outcome, {section = "storedObjects", id = diagnosticScalar(id),
+            value = diagnosticScalar(value), valueType = type(value), reason = reason,
+            expected = diagnosticScalar(expected)})
+    end
+end
+
+local function diagnosticBoundary(stage, name, ok, status, detail)
+    if BankDiagnostics ~= nil and BankDiagnostics.isEnabled() then
+        BankDiagnostics.emit("collector." .. stage, {section = "storedObjects", name = name,
+            ok = ok, status = status, detail = diagnosticScalar(detail)})
+    end
+end
+
 local function finite(value)
     return type(value) == "number" and value == value and value ~= math.huge and value ~= -math.huge
 end
@@ -12,18 +46,23 @@ end
 
 local function uniqueId(snapshot, object, helpers)
     local id = helpers.call(snapshot, object, "getUniqueId")
-    if not scalar(id) then id = object.uniqueId end
+    if not scalar(id) then
+        id = object.uniqueId
+        diagnosticRead("uniqueId", true, id, "raw_field_fallback")
+    end
     return scalar(id) and tostring(id) or nil
 end
 
 local function safe(snapshot, category, helpers, callback)
+    diagnosticBoundary("recordEnter", category, true)
     local ok, failure = pcall(callback)
+    diagnosticBoundary(ok and "recordExit" or "recordError", category, ok, nil, failure)
     if not ok then helpers.unknown(snapshot, category, "INVENTORY_STORED_OBJECT_ERROR", tostring(failure)) end
 end
 
 local function removed(snapshot, object, helpers)
     if type(helpers.isRemoving) == "function" then return helpers.isRemoving(snapshot, object) end
-    return object.markedForDeletion == true or object.isDeleting == true or object.isDeleted == true
+    return diagnosticField(object, "markedForDeletion") == true or diagnosticField(object, "isDeleting") == true or diagnosticField(object, "isDeleted") == true
         or helpers.call(snapshot, object, "getIsBeingDeleted") == true
 end
 
@@ -47,10 +86,14 @@ end
 
 local function fermentation(snapshot, bale, item, category, helpers)
     local fermenting = helpers.call(snapshot, bale, "getIsFermenting")
+    diagnosticDecision("BALE_FERMENTATION_STATE", type(fermenting) == "boolean" and "PASS" or "UNAVAILABLE",
+        item.id, fermenting, "Current fermentation state only.")
     if type(fermenting) ~= "boolean" then return end
     item.isFermenting = fermenting
     if fermenting then
         local progress = helpers.call(snapshot, bale, "getFermentingPercentage")
+        diagnosticDecision("BALE_FERMENTATION_PROGRESS", finite(progress) and progress >= 0 and progress <= 1 and "PASS" or "UNAVAILABLE",
+            item.id, progress, "Native fraction; no future crop value.")
         if finite(progress) and progress >= 0 and progress <= 1 then
             item.fermentationProgress = progress
         else
@@ -61,6 +104,8 @@ end
 
 local function owned(snapshot, object, category, id, helpers)
     local owner = helpers.call(snapshot, object, "getOwnerFarmId")
+    diagnosticDecision("STORED_OBJECT_OWNER", finite(owner) and "PASS" or "UNAVAILABLE", id, owner,
+        owner == snapshot.farm.id and "Exact ownership." or "Excluded: owner mismatch or unavailable.", snapshot.farm.id)
     if not finite(owner) then
         helpers.unknown(snapshot, category, "INVENTORY_OWNER_UNAVAILABLE", id .. ": object owner is unavailable; quantity omitted.")
         return false
@@ -71,7 +116,8 @@ end
 local function collectBale(snapshot, context, bale, item, category, helpers)
     if removed(snapshot, bale, helpers) then omitRemoving(snapshot, category, item.id, helpers); return end
     if not owned(snapshot, bale, category, item.id, helpers) then return end
-    if bale.isMissionBale == true then
+    if diagnosticField(bale, "isMissionBale") == true then
+        diagnosticDecision("BALE_MISSION_EXCLUSION", "PASS", item.id, true, "Contract bale excluded.")
         snapshot.inventory.excludedCount = snapshot.inventory.excludedCount + 1
         helpers.issue(snapshot, "INVENTORY_MISSION_BALE_EXCLUDED", item.id .. ": contract bale omitted from farm holdings.")
         return
@@ -88,6 +134,7 @@ local function collectPallet(snapshot, context, pallet, id, location, objectName
     if removed(snapshot, pallet, helpers) then omitRemoving(snapshot, "objectStorage", id, helpers); return end
     if not owned(snapshot, pallet, "objectStorage", id, helpers) then return end
     local state = helpers.call(snapshot, pallet, "getPropertyState")
+    diagnosticRead("storedPallet.propertyState decision", true, state, "existing_getter_result")
     local states = context.VehiclePropertyState or {}
     if states.MISSION ~= nil and state == states.MISSION then
         snapshot.inventory.excludedCount = snapshot.inventory.excludedCount + 1
@@ -126,6 +173,7 @@ local function collectPallet(snapshot, context, pallet, id, location, objectName
 end
 
 local function recordUnsupported(snapshot, context, object, id, location, helpers)
+    diagnosticDecision("VIRTUAL_QUANTITY", "UNAVAILABLE", id, nil, "No verified real counterpart; capacity is not inventory.")
     snapshot.inventory.sourceCount = snapshot.inventory.sourceCount + 1
     local className = type(object.REFERENCE_CLASS_NAME) == "string" and object.REFERENCE_CLASS_NAME or nil
     local kind = className == "Bale" and "storedBale"
@@ -174,15 +222,18 @@ local function collectStored(snapshot, context, helpers, blocked, blockedIds)
     for placeableKey, placeable in pairs(placeables) do
         safe(snapshot, "objectStorage", helpers, function()
             if type(placeable) ~= "table" then error("Invalid object-storage placeable record") end
-            if seenPlaceables[placeable] then return end
+            if seenPlaceables[placeable] then diagnosticDecision("OBJECT_STORAGE_DEDUP", "PASS", placeableKey, true, "Duplicate placeable reference excluded."); return end
             seenPlaceables[placeable] = true
             local spec = placeable.spec_objectStorage
             if spec == nil then return end
             if type(spec) ~= "table" then error("Invalid object-storage specialization") end
             local parentId = "objectStorage:" .. (uniqueId(snapshot, placeable, helpers) or tostring(placeableKey))
             local owner = helpers.call(snapshot, placeable, "getOwnerFarmId")
+            diagnosticDecision("OBJECT_STORAGE_OWNER", finite(owner) and "PASS" or "UNAVAILABLE", parentId, owner,
+                "Parent owner for virtual rows; real counterparts require their own ownership.", snapshot.farm.id)
             local deleting = removed(snapshot, placeable, helpers)
-            local objects = spec.storedObjects
+    local objects = spec.storedObjects
+            diagnosticRead("spec_objectStorage.storedObjects", true, objects, "selected_registry")
             if type(objects) ~= "table" then
                 if owner == snapshot.farm.id or not finite(owner) then
                     helpers.unknown(snapshot, "objectStorage", "INVENTORY_OBJECT_STORAGE_UNAVAILABLE", parentId .. ": stored-object enumeration is unavailable.")
@@ -199,7 +250,7 @@ local function collectStored(snapshot, context, helpers, blocked, blockedIds)
                     -- Block counterparts before attribution or deletion checks.
                     -- A foreign/deleting virtual object is not loose farm stock.
                     if type(real) == "table" then rememberReal(snapshot, real, helpers, blocked, blockedIds) end
-                    if seenObjects[object] then return end
+                    if seenObjects[object] then diagnosticDecision("STORED_OBJECT_DEDUP", "PASS", objectKey, true, "Duplicate abstract object excluded."); return end
                     seenObjects[object] = true
                     if sampled < 3 then
                         sampled = sampled + 1
@@ -217,7 +268,9 @@ local function collectStored(snapshot, context, helpers, blocked, blockedIds)
                         return
                     end
                     local realId = uniqueId(snapshot, real, helpers)
-                    if seenReal[real] or (realId ~= nil and seenRealIds[realId]) then return end
+                    if seenReal[real] or (realId ~= nil and seenRealIds[realId]) then
+                        diagnosticDecision("STORED_OBJECT_DEDUP", "PASS", realId, true, "Duplicate real counterpart reference or ID excluded."); return
+                    end
                     seenReal[real] = true
                     if realId ~= nil then seenRealIds[realId] = true end
                     local dialogText = helpers.call(snapshot, object, "getDialogText")
@@ -257,6 +310,8 @@ local function collectLoose(snapshot, context, helpers, blocked, blockedIds)
             if type(entry) ~= "table" then error("Invalid item registry record") end
             local object = type(entry.item) == "table" and entry.item or entry
             local isNativeBale = isBale(snapshot, context, object, helpers)
+            diagnosticDecision("LOOSE_BALE_TYPE", type(isNativeBale) == "boolean" and "PASS" or "UNAVAILABLE", key, isNativeBale,
+                isNativeBale == true and "Native bale." or "Excluded: foreign/unknown class.")
             if isNativeBale == false then return end
             if isNativeBale ~= true then
                 helpers.unknown(snapshot, "bales", "INVENTORY_BALE_TYPE_UNAVAILABLE", "Item registry entry " .. tostring(key) .. " could not be classified.")
@@ -264,7 +319,9 @@ local function collectLoose(snapshot, context, helpers, blocked, blockedIds)
             end
             if type(helpers.registeredBales) == "table" then helpers.registeredBales[object] = true end
             local nativeId = uniqueId(snapshot, object, helpers)
-            if seen[object] or blocked[object] or (nativeId ~= nil and (seenIds[nativeId] or blockedIds[nativeId])) then return end
+            if seen[object] or blocked[object] or (nativeId ~= nil and (seenIds[nativeId] or blockedIds[nativeId])) then
+                diagnosticDecision("LOOSE_BALE_DEDUP", "PASS", nativeId, true, "Repeated, stored or transitional counterpart excluded."); return
+            end
             seen[object] = true
             if nativeId ~= nil then seenIds[nativeId] = true end
             local id = "bale:" .. (nativeId or tostring(key))
@@ -275,17 +332,20 @@ local function collectLoose(snapshot, context, helpers, blocked, blockedIds)
 end
 
 function BankStoredObjectDataSource.collect(snapshot, context, helpers, blockedRealObjects)
+    diagnosticBoundary("enter", "collect", true)
     blockedRealObjects = blockedRealObjects or {}
     local blockedIds = helpers.blockedUniqueIds or {}
     snapshot.inventory.coverage.objectStorage = "unavailable"
     snapshot.inventory.coverage.bales = "unavailable"
     if type(snapshot.farm) ~= "table" or not finite(snapshot.farm.id) or snapshot.farm.id <= 0 then
         helpers.issue(snapshot, "INVENTORY_FARM_UNAVAILABLE", "Stored objects cannot be attributed without an active farm.")
+        diagnosticBoundary("exit", "collect", true, "unavailable")
         return blockedRealObjects
     end
     -- Fixed traversal order prevents physical/virtual counterparts being counted
     -- twice. The supplied set survives an outer collector pcall.
     collectStored(snapshot, context, helpers, blockedRealObjects, blockedIds)
     collectLoose(snapshot, context, helpers, blockedRealObjects, blockedIds)
+    diagnosticBoundary("exit", "collect", true, snapshot.inventory.coverage.bales)
     return blockedRealObjects
 end

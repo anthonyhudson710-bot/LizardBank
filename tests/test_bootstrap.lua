@@ -256,3 +256,52 @@ test("later loading wrappers survive unload and cannot resurrect the bank observ
     assertEqual(bank.historyRuntime, nil)
     assertEqual(env.Mission00.loadMission00Finished, foreign)
 end)
+
+test("model preparation failures remain explicit instead of looking like ordinary withheld results", function()
+    local bank, env = fixture()
+    local checks, events = {}, {}
+    env.BankDiagnostics = {isEnabled = function() return true end,
+        emit = function(id, data) events[id] = data end,
+        check = function(id, status) checks[id] = status end}
+    env.BankUnderwriting = {prepare = function() error("fixture model failure") end}
+    local snapshot = bank:collectSnapshot()
+    assertEqual(snapshot.underwriting, nil)
+    assertEqual(snapshot.issues[1].code, "UNDERWRITING_ERROR")
+    assertEqual(checks.UNDERWRITING_PREPARE, "FAIL")
+    assertContains(events["underwriting.prepare.error"].error, "fixture model failure")
+    env.BankUnderwriting.prepare = function() return nil end
+    snapshot = bank:collectSnapshot()
+    assertEqual(checks.UNDERWRITING_PREPARE, "FAIL")
+    assertEqual(snapshot.issues[1].code, "UNDERWRITING_ERROR")
+    env.BankUnderwriting = false
+    snapshot = bank:collectSnapshot()
+    assertEqual(checks.UNDERWRITING_PREPARE, "UNAVAILABLE")
+    assertEqual(snapshot.issues[1].code, "UNDERWRITING_UNAVAILABLE")
+end)
+
+test("manual expectations do not certify unavailable counts as verified zero", function()
+    local bank, env = fixture()
+    local checks = {}
+    env.BankDiagnostics = {isEnabled = function() return true end, beginMission = function() end,
+        beginCapture = function() end, endCapture = function() end, emit = function() end, dump = function() end,
+        summary = function() end, check = function(id, status, evidence) checks[id] = {status = status, evidence = evidence} end}
+    env.BankValidation = {evaluate = function() end}
+    env.BankDataSource.capture = function()
+        return {farm = {id = 7}, cash = {status = "available", value = 100.4},
+            equipment = {status = "unavailable", ownedCount = 0}, animals = {status = "partial", totalCount = 0}}
+    end
+    bank.enabled = true
+    bank:consoleExpect("equipmentOwned", "0")
+    assertEqual(checks.MANUAL_EXPECT_equipmentOwned.status, "UNAVAILABLE")
+    bank:consoleExpect("animalsCount", "0")
+    assertEqual(checks.MANUAL_EXPECT_animalsCount.status, "UNAVAILABLE")
+    bank:consoleExpect("cash", "100")
+    assertEqual(checks.MANUAL_EXPECT_cash.status, "PASS")
+    assertEqual(checks.MANUAL_EXPECT_cash.evidence.tolerance, 0.5)
+    bank:consoleExpect("cash", "100.00")
+    assertEqual(checks.MANUAL_EXPECT_cash.status, "FAIL")
+    env.BankDataSource.capture = function() error("new capture failed") end
+    bank:consoleExpect("cash", "100")
+    assertEqual(checks.MANUAL_EXPECT_cash.status, "UNAVAILABLE")
+    assertEqual(bank.lastSnapshot, nil)
+end)

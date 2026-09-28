@@ -2,6 +2,34 @@
 -- calendar periods, complete history or cash flow. See docs/finance-sources.md.
 BankFinanceDataSource = {}
 
+-- Opt-in evidence only. No extra game accessors or live references in events.
+local function diagnosticScalar(value)
+    if type(value) == "string" or type(value) == "boolean" then return value end
+    if type(value) == "number" and value == value and math.abs(value) < math.huge then return value end
+    return nil
+end
+
+local function diagnosticRead(name, ok, value, reason)
+    if BankDiagnostics ~= nil and BankDiagnostics.isEnabled() then
+        BankDiagnostics.read("finance", name, ok, value, {reason = reason})
+    end
+end
+
+local function diagnosticDecision(checkId, outcome, id, value, reason, expected)
+    if BankDiagnostics ~= nil and BankDiagnostics.isEnabled() then
+        BankDiagnostics.check(checkId, outcome, {section = "finance", id = diagnosticScalar(id),
+            value = diagnosticScalar(value), valueType = type(value), reason = reason,
+            expected = diagnosticScalar(expected)})
+    end
+end
+
+local function diagnosticBoundary(stage, name, ok, status, detail)
+    if BankDiagnostics ~= nil and BankDiagnostics.isEnabled() then
+        BankDiagnostics.emit("collector." .. stage, {section = "finance", name = name,
+            ok = ok, status = status, detail = diagnosticScalar(detail)})
+    end
+end
+
 local MAP_SOURCE = "lizardbank.finance-map.v1 (policy; native category matching unverified)"
 local CATEGORY_MAP = {
     soldProducts = "operating", soldMilk = "operating", soldBales = "operating", soldWood = "operating",
@@ -57,17 +85,20 @@ end
 
 local function issue(snapshot, code, detail)
     snapshot.issues[#snapshot.issues + 1] = {code = code, detail = tostring(detail)}
+    diagnosticBoundary("issue", code, false, "reported", detail)
 end
 
 local function call(snapshot, object, method, ...)
-    if type(object) ~= "table" then return nil end
+    if type(object) ~= "table" then diagnosticRead(method, false, nil, "missing_object"); return nil end
     local ok, fn = pcall(function() return object[method] end)
+    diagnosticRead(method, ok, fn, "protected_accessor_lookup")
     if not ok then
         issue(snapshot, "FINANCE_ACCESSOR_ERROR", method .. ": " .. tostring(fn))
         return nil
     end
-    if type(fn) ~= "function" then return nil end
+    if type(fn) ~= "function" then diagnosticRead(method, false, nil, "missing_accessor"); return nil end
     local succeeded, value = pcall(fn, object, ...)
+    diagnosticRead(method, succeeded, value, succeeded and "accessor_return" or "accessor_error")
     if not succeeded then
         issue(snapshot, "FINANCE_ACCESSOR_ERROR", method .. ": " .. tostring(value))
         return nil
@@ -76,8 +107,9 @@ local function call(snapshot, object, method, ...)
 end
 
 local function field(snapshot, object, name)
-    if type(object) ~= "table" then return nil end
+    if type(object) ~= "table" then diagnosticRead(name, false, nil, "missing_object"); return nil end
     local ok, value = pcall(function() return object[name] end)
+    diagnosticRead(name, ok, value, ok and "raw_field" or "field_error")
     if ok then return value end
     issue(snapshot, "FINANCE_FIELD_ERROR", tostring(name) .. ": " .. tostring(value))
     return nil
@@ -108,8 +140,10 @@ end
 
 function BankFinanceDataSource.classifyCategory(categoryKey)
     if type(categoryKey) == "string" and CATEGORY_MAP[categoryKey] ~= nil then
+        diagnosticDecision("FINANCE_CATEGORY_POLICY", "WARN", categoryKey, CATEGORY_MAP[categoryKey], MAP_SOURCE)
         return CATEGORY_MAP[categoryKey], MAP_SOURCE
     end
+    diagnosticDecision("FINANCE_CATEGORY_POLICY", "UNAVAILABLE", categoryKey, "unclassified", "No exact policy mapping.")
     return "unclassified", "No exact category match in lizardbank.finance-map.v1"
 end
 
@@ -118,15 +152,19 @@ function BankFinanceDataSource.classifyMoneyType(moneyType, moneyTypes)
         return nil, "unclassified", "MoneyType or its runtime registry is unavailable"
     end
     local unknownOk, unknownType = pcall(function() return moneyTypes.UNKNOWN end)
+    diagnosticRead("MoneyType.UNKNOWN", unknownOk, unknownType, "existing_enum_lookup")
     if unknownOk and unknownType ~= nil and rawequal(unknownType, moneyType) then
+        diagnosticDecision("MONEY_TYPE_CLASSIFICATION", "UNAVAILABLE", "UNKNOWN", "unclassified", "Runtime unknown type preserved.")
         return nil, "unclassified", "Runtime MoneyType.UNKNOWN"
     end
     local matchedKey, matchedClass, matchedName
     for name, policy in pairs(MONEY_TYPE_MAP) do
         local ok, enumValue = pcall(function() return moneyTypes[name] end)
+        diagnosticRead(name, ok, enumValue, "existing_MoneyType_lookup")
         -- rawequal also prevents a custom __eq metamethod from inventing a match.
         if ok and enumValue ~= nil and rawequal(enumValue, moneyType) then
             if matchedKey ~= nil and (matchedKey ~= policy[1] or matchedClass ~= policy[2]) then
+                diagnosticDecision("MONEY_TYPE_CLASSIFICATION", "WARN", name, policy[2], "Conflicting exact identities; retained as unclassified.")
                 return nil, "unclassified", "Ambiguous runtime MoneyType identity matches different policy categories"
             end
             matchedKey, matchedClass = policy[1], policy[2]
@@ -134,8 +172,10 @@ function BankFinanceDataSource.classifyMoneyType(moneyType, moneyTypes)
         end
     end
     if matchedKey ~= nil then
+        diagnosticDecision("MONEY_TYPE_CLASSIFICATION", "PASS", matchedName, matchedClass, "Exact runtime identity; analytical treatment is policy.")
         return matchedKey, matchedClass, "lizardbank.finance-map.v1 exact runtime MoneyType." .. matchedName
     end
+    diagnosticDecision("MONEY_TYPE_CLASSIFICATION", "UNAVAILABLE", nil, "unclassified", "No exact runtime identity match.")
     return nil, "unclassified", "No exact runtime MoneyType identity match in lizardbank.finance-map.v1"
 end
 
@@ -165,10 +205,12 @@ local function labelFor(snapshot, context, bucket, categoryKey)
 end
 
 local function readBucket(snapshot, context, bucket, bucketKind, periodKey, source, seen)
+    diagnosticBoundary("recordEnter", bucketKind, true, nil, source)
     local section = snapshot.finance
     if #section.buckets >= MAX_BUCKETS then
         section.truncated = true
         issue(snapshot, "FINANCE_SCAN_LIMIT", "Retained finance buckets exceed the scan limit; no missing periods are invented.")
+        diagnosticBoundary("recordExit", bucketKind, true, "truncated")
         return
     end
     local descriptor = {id = "finance-bucket-" .. tostring(#section.buckets + 1), kind = bucketKind,
@@ -178,12 +220,15 @@ local function readBucket(snapshot, context, bucket, bucketKind, periodKey, sour
     if type(bucket) ~= "table" then
         section.unknownBucketCount = section.unknownBucketCount + 1
         issue(snapshot, "FINANCE_BUCKET_UNAVAILABLE", source .. " is not a readable retained-category map.")
+        diagnosticBoundary("recordExit", bucketKind, true, "unavailable")
         return
     end
     if seen[bucket] ~= nil then
+        diagnosticDecision("FINANCE_BUCKET_DEDUP", "PASS", periodKey, seen[bucket], "Aliased retained bucket excluded.")
         descriptor.status, descriptor.duplicateOf = "duplicate", seen[bucket]
         section.duplicateBucketCount = section.duplicateBucketCount + 1
         issue(snapshot, "FINANCE_BUCKET_ALIAS", source .. " aliases an already read category map; not counted twice.")
+        diagnosticBoundary("recordExit", bucketKind, true, "duplicate")
         return
     end
     seen[bucket] = descriptor.id
@@ -229,6 +274,8 @@ local function readBucket(snapshot, context, bucket, bucketKind, periodKey, sour
             status = "unavailable", source = source .. "[" .. tostring(categoryKey) .. "]"}
         section.records[#section.records + 1] = record
         local value = field(snapshot, bucket, categoryKey)
+        diagnosticDecision("FINANCE_RAW_VALUE", finite(value) and "PASS" or "UNAVAILABLE", categoryKey, value,
+            "Signed value preserved; period and native semantics unverified.", periodKey)
         record.rawValueType = type(value)
         if finite(value) then
             record.rawSignedValue, record.status = value, "available"
@@ -247,9 +294,11 @@ local function readBucket(snapshot, context, bucket, bucketKind, periodKey, sour
     elseif descriptor.knownValueCount > 0 and descriptor.unknownValueCount == 0 and not descriptor.truncated then
         descriptor.status = "available"
     end
+    diagnosticBoundary("recordExit", bucketKind, true, descriptor.status)
 end
 
 function BankFinanceDataSource.collect(snapshot, context)
+    diagnosticBoundary("enter", "collect", true)
     local section = {status = "unavailable", verification = "unverified", windowStatus = "unverified",
         classificationSource = MAP_SOURCE, records = {}, buckets = {}, metadata = {}, knownValueCount = 0,
         unknownValueCount = 0, unclassifiedCount = 0, unknownBucketCount = 0, duplicateBucketCount = 0,
@@ -264,6 +313,7 @@ function BankFinanceDataSource.collect(snapshot, context)
     issue(snapshot, "FINANCE_NATIVE_UNVERIFIED", "Retained finance rows preserve native signed values. FS25 category layout, sign convention, calendar order, current/completed periods, padding and retained window require Finance-screen reconciliation; no historical cash-flow totals are inferred.")
     if not finite(farmId) or farmId <= 0 then
         issue(snapshot, "FINANCE_FARM_UNAVAILABLE", "No resolved active farm; retained finances cannot be attributed.")
+        diagnosticBoundary("exit", "collect", true, section.status)
         return
     end
 
@@ -280,15 +330,19 @@ function BankFinanceDataSource.collect(snapshot, context)
             local candidateOwner = field(snapshot, candidate.value, "farmId")
             local current = field(snapshot, candidate.value, "finances")
             local history = field(snapshot, candidate.value, "financesHistory")
+            diagnosticDecision("FINANCE_SOURCE_OWNER", finite(candidateOwner) and (candidateOwner == farmId and "PASS" or "FAIL") or "WARN",
+                candidate.source, candidateOwner, "Explicit owner metadata checked; absent metadata relies on requested farm lookup.", farmId)
             if finite(candidateOwner) and candidateOwner ~= farmId then
                 issue(snapshot, "FINANCE_OWNER_MISMATCH", candidate.source .. " reports a different farm ID and is excluded.")
             elseif stats == nil and (type(current) == "table" or type(history) == "table") then
                 stats, section.source = candidate.value, candidate.source .. " [FS25 compatibility candidate]"
+                diagnosticDecision("FINANCE_SELECTED_SOURCE", "WARN", index, section.source, "Guarded candidate, not reconciled native history.")
             end
         end
     end
     if stats == nil then
         issue(snapshot, "FINANCE_STATS_UNAVAILABLE", "No candidate farm stats exposes finances or financesHistory; missing data is not zero.")
+        diagnosticBoundary("exit", "collect", true, section.status)
         return
     end
     section.status = "partial"
@@ -304,6 +358,7 @@ function BankFinanceDataSource.collect(snapshot, context)
         local ok, failure = pcall(readBucket, snapshot, context, current, "currentCandidate", "current", section.source .. ".finances", seen)
         if not ok then
             section.unknownBucketCount = section.unknownBucketCount + 1
+            diagnosticBoundary("recordError", "currentCandidate", false, "partial", failure)
             issue(snapshot, "FINANCE_BUCKET_ERROR", failure)
         end
     else
@@ -315,6 +370,7 @@ function BankFinanceDataSource.collect(snapshot, context)
                 section.source .. ".financesHistory[" .. tostring(periodKey) .. "]", seen)
             if not ok then
                 section.unknownBucketCount = section.unknownBucketCount + 1
+                diagnosticBoundary("recordError", "historyCandidate", false, "partial", failure)
                 issue(snapshot, "FINANCE_BUCKET_ERROR", failure)
             end
         end
@@ -327,4 +383,5 @@ function BankFinanceDataSource.collect(snapshot, context)
     if section.unclassifiedCount > 0 then
         issue(snapshot, "FINANCE_UNCLASSIFIED", tostring(section.unclassifiedCount) .. " rows have no exact classification policy match and remain unclassified.")
     end
+    diagnosticBoundary("exit", "collect", true, section.status)
 end

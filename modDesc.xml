@@ -1,17 +1,22 @@
 <?xml version="1.0" encoding="utf-8" standalone="no"?>
 <modDesc descVersion="93">
     <author>Lizard Bank</author>
-    <version>0.0.5</version>
+    <version>0.0.6</version>
     <title><en>Lizard Bank</en></title>
     <description>
         <en><![CDATA[Farm assets, retained financial records, ongoing history, seasonal cash scenarios and explainable creditworthiness.
 Single-player preview. Open with Right Ctrl+B (remappable in Controls).
+Validation build: structured debug logging starts automatically; lbDebug off disables it.
 Assessments require sufficient observed history. Partial native-data coverage; no loans or economic changes.]]></en>
     </description>
     <iconFilename>assets/icon.dds</iconFilename>
     <multiplayer supported="false"/>
     <l10n filenamePrefix="l10n/l10n"/>
     <extraSourceFiles>
+        <sourceFile filename="scripts/BankDebugConfig.lua"/>
+        <sourceFile filename="scripts/BankValidationCatalog.lua"/>
+        <sourceFile filename="scripts/BankDiagnostics.lua"/>
+        <sourceFile filename="scripts/BankValidation.lua"/>
         <sourceFile filename="scripts/BankPropertyDataSource.lua"/>
         <sourceFile filename="scripts/BankAnimalDataSource.lua"/>
         <sourceFile filename="scripts/BankStoredObjectDataSource.lua"/>
@@ -22,6 +27,7 @@ Assessments require sufficient observed history. Partial native-data coverage; n
         <sourceFile filename="scripts/BankHistoryStore.lua"/>
         <sourceFile filename="scripts/BankHistoryRuntime.lua"/>
         <sourceFile filename="scripts/BankUnderwriting.lua"/>
+        <sourceFile filename="scripts/BankValidationProbes.lua"/>
         <sourceFile filename="scripts/BankFinancialReport.lua"/>
         <sourceFile filename="scripts/BankReport.lua"/>
         <sourceFile filename="scripts/BankScreen.lua"/>

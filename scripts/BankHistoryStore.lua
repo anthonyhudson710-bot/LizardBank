@@ -3,6 +3,72 @@ BankHistoryStore = {}
 local N = BankHistory.isNumber
 local numeric = {"year", "month", "startDay", "startTime", "endDay", "endTime", "openingCash", "closingCash", "events"}
 for _, key in ipairs(BankHistory.AMOUNTS) do numeric[#numeric + 1] = key end
+local function diagnostic(method, ...) BankHistory.diagnostic(method, ...) end
+local function filename(path)
+    return type(path) == "string" and path:gsub("\\", "/"):match("([^/]+)/?$") or nil
+end
+local function clock()
+    if type(os) == "table" and type(os.clock) == "function" then
+        local ok, value = pcall(os.clock)
+        if ok and N(value) then return value end
+    end
+end
+
+-- Compare the serialized contract only. Source labels and session diagnostics
+-- are deliberately not persisted and therefore cannot prove XML integrity.
+local function verifyReadback(expected, actual)
+    local differences, checked = {}, 0
+    local function field(path, before, after)
+        checked = checked + 1
+        if before ~= after then differences[#differences + 1] = path end
+    end
+    for _, key in ipairs({"schemaVersion", "farmId", "cycle", "balance", "debt", "mode"}) do field(key, expected[key], actual[key]) end
+    for _, key in ipairs({"day", "period", "dayTime", "daysPerPeriod"}) do field("last." .. key, expected.last[key], actual.last[key]) end
+    local function period(path, before, after)
+        if type(after) ~= "table" then field(path, "period", nil); return end
+        for _, key in ipairs(numeric) do field(path .. "." .. key, before[key], after[key]) end
+        for _, key in ipairs({"complete", "reconciled"}) do field(path .. "." .. key, before[key], after[key]) end
+        field(path .. ".gapCount", #(before.gaps or {}), #(after.gaps or {}))
+        for i, value in ipairs(before.gaps or {}) do field(path .. ".gap" .. i, value, (after.gaps or {})[i]) end
+        local beforeCount, afterCount = 0, 0
+        for name, entry in pairs(before.categories or {}) do
+            beforeCount = beforeCount + 1
+            local saved = (after.categories or {})[name] or {}
+            for _, key in ipairs({"classification", "inflow", "outflow"}) do field(path .. ".category." .. name .. "." .. key, entry[key], saved[key]) end
+        end
+        for _ in pairs(after.categories or {}) do afterCount = afterCount + 1 end
+        field(path .. ".categoryCount", beforeCount, afterCount)
+    end
+    period("current", expected.current, actual.current)
+    field("periodCount", #expected.periods, #actual.periods)
+    for i, value in ipairs(expected.periods) do period("period" .. i, value, actual.periods[i]) end
+    local first = {}
+    for i = 1, math.min(12, #differences) do first[i] = differences[i] end
+    return {fieldsCompared = checked, mismatchCount = #differences, firstMismatches = first}
+end
+
+local function debugReadback(path, ledger)
+    if not BankHistory.diagnosticsEnabled() then return end
+    -- Debug verification must neither alter the writer's result nor leak a
+    -- failed/missing reader into the native save callback.
+    local before = clock()
+    local called, saved = pcall(BankHistoryStore.read, path)
+    local elapsed = clock()
+    local proof = {filename = filename(path), farmId = ledger.farmId, readInvoked = true,
+        readSucceeded = called and type(saved) == "table", scope = "Bank sidecar fields only; native save promotion not proven"}
+    if before and elapsed then proof.elapsedCpuSeconds = math.max(0, elapsed - before)
+    else proof.timing = "unavailable" end
+    local outcome = "UNAVAILABLE"
+    if proof.readSucceeded then
+        local compared, result = pcall(verifyReadback, ledger, saved)
+        if compared then
+            for key, value in pairs(result) do proof[key] = value end
+            outcome = result.mismatchCount == 0 and "PASS" or "FAIL"
+        else proof.reason = "Readback comparison could not run" end
+    else proof.reason = "Saved sidecar could not be decoded by the normal bounded reader" end
+    diagnostic("emit", "history.xml.readback", proof)
+    diagnostic("check", "HISTORY_XML_READBACK", outcome, proof)
+end
 
 local function writeNumber(xml, key, value)
     if N(value) then setXMLString(xml, key, string.format("%.17g", value)) end
@@ -77,7 +143,10 @@ function BankHistoryStore.available()
 end
 
 function BankHistoryStore.write(path, ledger)
-    if not BankHistoryStore.available() then return false, "Native XML functions unavailable." end
+    if not BankHistoryStore.available() then
+        diagnostic("check", "HISTORY_XML_WRITE", "UNAVAILABLE", {filename = filename(path), reason = "Native XML functions unavailable"})
+        return false, "Native XML functions unavailable."
+    end
     local xml
     local ok, err = pcall(function()
         xml = createXMLFile("LizardBankHistory", path, "lizardBankHistory")
@@ -96,16 +165,29 @@ function BankHistoryStore.write(path, ledger)
         writeNumber(xml, root .. "#count", #ledger.periods)
         writePeriod(xml, root .. ".current", ledger.current)
         for i, p in ipairs(ledger.periods) do writePeriod(xml, root .. ".period(" .. i - 1 .. ")", p) end
-        assert(saveXMLFile(xml) == true, "History XML save success was not confirmed")
+        local saved = saveXMLFile(xml)
+        diagnostic("read", "history", "saveXMLFile", saved == true, saved, {filename = filename(path), stage = "sidecar_write_acknowledgement"})
+        assert(saved == true, "History XML save success was not confirmed")
     end)
     if xml ~= nil and xml ~= 0 then pcall(delete, xml) end
-    if ok then return true, nil end
+    diagnostic("emit", "history.xml.write", {filename = filename(path), succeeded = ok, handleReleaseAttempted = xml ~= nil and xml ~= 0})
+    diagnostic("check", "HISTORY_XML_WRITE", ok and "PASS" or "FAIL", {filename = filename(path), acknowledged = ok, scope = "Bank sidecar write only"})
+    if ok then
+        if BankHistory.diagnosticsEnabled() then pcall(debugReadback, path, ledger) end
+        return true, nil
+    end
     return false, tostring(err)
 end
 
 function BankHistoryStore.read(path)
-    if not BankHistoryStore.available() then return nil, "Native XML functions unavailable." end
-    if not fileExists(path) then return nil, "No saved Lizard Bank history yet." end
+    if not BankHistoryStore.available() then
+        diagnostic("emit", "history.xml.read", {filename = filename(path), succeeded = false, reason = "Native XML functions unavailable"})
+        return nil, "Native XML functions unavailable."
+    end
+    if not fileExists(path) then
+        diagnostic("emit", "history.xml.read", {filename = filename(path), succeeded = false, reason = "Sidecar absent"})
+        return nil, "No saved Lizard Bank history yet."
+    end
     local xml
     local ok, result = pcall(function()
         xml = loadXMLFile("LizardBankHistory", path)
@@ -139,6 +221,9 @@ function BankHistoryStore.read(path)
         return ledger
     end)
     if xml ~= nil and xml ~= 0 then pcall(delete, xml) end
+    diagnostic("emit", "history.xml.read", {filename = filename(path), succeeded = ok,
+        handleReleaseAttempted = xml ~= nil and xml ~= 0, farmId = ok and result.farmId or nil,
+        retainedPeriods = ok and #result.periods or nil, reason = not ok and "Bounded XML decode rejected sidecar" or nil})
     if ok then return result, nil end
     return nil, tostring(result)
 end
