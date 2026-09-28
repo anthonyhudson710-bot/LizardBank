@@ -1,6 +1,7 @@
 # Windows test: 0.0.4
 
-Status: **earlier builds user-confirmed through 0.0.3; 0.0.4 additions pending**.
+Status: **user-reported success through 0.0.4**. Individual rows below remain
+unreported regression checks; overall confirmation does not establish each case.
 The confirmations were received on 2026-09-27. The first supplied log identifies
 FS25 1.23.1.0; the second shows Arkansas 4X and no new problem categories in its
 comparison view. Individual test-case results were not retained. The checklist

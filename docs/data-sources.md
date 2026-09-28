@@ -1,6 +1,6 @@
 # Snapshot sources and evidence
 
-This file separates published FS25 evidence from compatibility candidates. The user has reported success through v0.0.3; [validation history](VALIDATION.md) records the evidence and its limits. The first log identifies FS25 1.23.1.0; the second shows Arkansas 4X loading. These confirm overall reported results, not which getter/fallback supplied each value. Local injected tests validate collector behavior, not engine compatibility. The v0.0.4 additions await Windows verification.
+This file separates published FS25 evidence from compatibility candidates. The user has reported success through v0.0.4; [validation history](VALIDATION.md) records the evidence and its limits. The first log identifies FS25 1.23.1.0; the second shows Arkansas 4X loading. These confirm overall reported results, not which getter/fallback supplied each value. Local injected tests validate collector behavior, not engine compatibility. Unverified optional paths and units remain unverified despite overall build success.
 
 | Input | Read path | Evidence and meaning |
 | --- | --- | --- |
