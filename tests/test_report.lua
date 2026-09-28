@@ -90,7 +90,8 @@ end)
 
 test("screen captures only on open/refresh, replaces failed data and releases references", function()
     local saved = {Class = Class, ScreenElement = ScreenElement, FocusManager = FocusManager,
-        Logging = Logging, g_i18n = g_i18n, g_currentModName = g_currentModName, BankScreen = BankScreen}
+        Logging = Logging, g_i18n = g_i18n, g_currentModName = g_currentModName, BankScreen = BankScreen,
+        BankDiagnostics = BankDiagnostics}
     local ok, message = pcall(function()
         local cursor = false
         Class = function(class, base)
@@ -110,6 +111,13 @@ test("screen captures only on open/refresh, replaces failed data and releases re
             linkElements = function(self) self.links = self.links + 1 end,
             setFocus = function(self, control) self.focused = control end}
         Logging = {error = function() end}
+        local pageDumps, lastDump = 0, nil
+        BankDiagnostics = {isEnabled = function() return true end, emit = function() end,
+            read = function() end, check = function() end, dump = function(name, pages)
+                assertEqual(name, "reportPages")
+                pageDumps = pageDumps + 1
+                lastDump = pages
+            end}
         g_i18n, g_currentModName = i18n, "FS25_LizardBank"
         dofile("scripts/BankScreen.lua")
         local captures, failing, mode = 0, false, "standard"
@@ -127,18 +135,28 @@ test("screen captures only on open/refresh, replaces failed data and releases re
         assertEqual(FocusManager.links, 10)
         screen:onOpen()
         assertEqual(captures, 1)
+        assertEqual(pageDumps, 1)
+        assertTrue(lastDump == screen.pages)
+        assertTrue(#lastDump > 1, "Unvisited pages must already be in the prepared text dump")
         assertTrue(cursor)
         assertEqual(FocusManager.focused, screen.refreshButton)
         screen:onClickNext()
         screen:onClickPrevious()
         assertEqual(captures, 1)
+        assertEqual(pageDumps, 1, "Navigation must not repeat the full report dump")
         screen:onClickRefresh()
         assertEqual(captures, 2)
         screen:onClickPolicy()
         assertEqual(captures, 3)
+        assertEqual(pageDumps, 3)
         assertContains(screen.policyButton.text, "Strict")
+        BankDiagnostics.isEnabled = function() return false end
+        screen:onClickRefresh()
+        assertEqual(pageDumps, 3, "Quiet mode must not dump report pages")
+        BankDiagnostics.isEnabled = function() return true end
         failing = true
         screen:onClickRefresh()
+        assertEqual(pageDumps, 3, "Failed refresh must not log stale prepared pages as new evidence")
         assertEqual(#screen.pages, 1)
         assertContains(screen.reportText.text, "could not be refreshed")
         assertFalse(screen.reportText.text:find("Cash: $100", 1, true) ~= nil)
@@ -150,7 +168,7 @@ test("screen captures only on open/refresh, replaces failed data and releases re
         assertEqual(screen.owner, nil)
         assertTrue(screen.deleted)
     end)
-    for _, key in ipairs({"Class", "ScreenElement", "FocusManager", "Logging", "g_i18n", "g_currentModName", "BankScreen"}) do
+    for _, key in ipairs({"Class", "ScreenElement", "FocusManager", "Logging", "g_i18n", "g_currentModName", "BankScreen", "BankDiagnostics"}) do
         _G[key] = saved[key]
     end
     assert(ok, message)

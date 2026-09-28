@@ -84,7 +84,10 @@ local function xmlFixture(fn)
             if stats.corrupt then db[xml.path]["lizardBankHistory#mode"] = "strict" end
             return stats.acknowledge ~= false
         end,
-        delete = function() stats.released = stats.released + 1 end,
+        delete = function()
+            stats.released = stats.released + 1
+            if stats.throwDelete then error(stats.throwDelete, 0) end
+        end,
         fileExists = function(path) return db[path] ~= nil end
     }, function() fn(stats, db) end)
 end
@@ -276,6 +279,85 @@ test("unacknowledged XML write cannot emit passing readback", function()
             equal(stats.reads, 0)
             equal(find(checks, "id", "HISTORY_XML_WRITE").outcome, "FAIL")
             equal(find(checks, "id", "HISTORY_XML_READBACK"), nil)
+        end)
+    end)
+end)
+
+test("XML release tracing reports one successful native call per acquired handle", function()
+    logger(true, function(events, checks)
+        xmlFixture(function(stats)
+            equal(BankHistoryStore.write("/private/person/history.xml", fullYear()), true)
+            equal(stats.released, 2) -- writer plus diagnostic readback
+            equal(occurrences(events, "history.xml.release"), 2)
+            local operations = {}
+            for _, event in ipairs(events) do
+                if event.name == "history.xml.release" then
+                    equal(event.data.filename, "history.xml"); equal(event.data.callSucceeded, true)
+                    equal(event.data.error, nil); operations[event.data.operation] = true
+                end
+            end
+            assert(operations.write and operations.read)
+            equal(find(checks, "id", "HISTORY_XML_RELEASE").outcome, "PASS")
+        end)
+    end)
+end)
+
+test("throwing XML release is bounded visible and preserves successful read write results", function()
+    for _, enabled in ipairs({false, true}) do
+        logger(enabled, function(events, checks)
+            xmlFixture(function(stats)
+                stats.throwDelete = "release-failure:" .. string.rep("x", 400)
+                local ledger = fullYear()
+                local ok, err = BankHistoryStore.write("history.xml", ledger)
+                equal(ok, true); equal(err, nil)
+                local saved, readError = BankHistoryStore.read("history.xml")
+                assert(saved); equal(readError, nil); equal(saved.balance, ledger.balance)
+                equal(#saved.periods, #ledger.periods)
+                equal(stats.released, enabled and 3 or 2)
+                if enabled then
+                    equal(occurrences(events, "history.xml.release"), 3)
+                    for _, event in ipairs(events) do
+                        if event.name == "history.xml.release" then
+                            equal(event.data.callSucceeded, false); equal(#event.data.error, 256)
+                        end
+                    end
+                    equal(find(checks, "id", "HISTORY_XML_RELEASE").outcome, "FAIL")
+                    equal(find(checks, "id", "HISTORY_XML_WRITE").outcome, "PASS")
+                    equal(find(checks, "id", "HISTORY_XML_READBACK").outcome, "PASS")
+                    equal(find(events, "name", "history.xml.write").data.handleReleaseCallSucceeded, false)
+                    equal(find(events, "name", "history.xml.read").data.handleReleaseCallSucceeded, false)
+                else equal(#events, 0); equal(#checks, 0) end
+            end)
+        end)
+    end
+end)
+
+test("throwing XML release never replaces original write or decode failure", function()
+    logger(true, function(events, checks)
+        xmlFixture(function(stats, db)
+            local ledger = fullYear()
+            stats.acknowledge, stats.throwDelete = false, "release-failure"
+            local ok, err = BankHistoryStore.write("history.xml", ledger)
+            equal(ok, false); assert(err:find("History XML save success was not confirmed", 1, true))
+            equal(stats.released, 1); equal(stats.reads, 0)
+            equal(find(checks, "id", "HISTORY_XML_RELEASE").outcome, "FAIL")
+            db["history.xml"]["lizardBankHistory#schema"] = "-1"
+            local saved, readError = BankHistoryStore.read("history.xml")
+            equal(saved, nil); assert(readError:find("Unsupported history schema", 1, true))
+            equal(stats.released, 2); equal(occurrences(events, "history.xml.release"), 2)
+            equal(find(events, "name", "history.xml.read").data.succeeded, false)
+        end)
+    end)
+end)
+
+test("non-string XML release errors never invoke arbitrary error metamethods", function()
+    logger(true, function(events, checks)
+        xmlFixture(function(stats)
+            stats.throwDelete = setmetatable({}, {__tostring = function() error("must not stringify release error") end})
+            equal(BankHistoryStore.write("history.xml", fullYear()), true)
+            equal(stats.released, 2)
+            equal(find(checks, "id", "HISTORY_XML_RELEASE").outcome, "FAIL")
+            equal(find(events, "name", "history.xml.release").data.error, "Non-string release error: table")
         end)
     end)
 end)

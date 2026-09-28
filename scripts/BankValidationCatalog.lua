@@ -1,15 +1,15 @@
--- Scenario inventory for the 0.0.6 validation release.
+-- Scenario inventory for the 0.0.7 validation release.
 -- These rows declare required evidence, not results. A runtime invariant PASS
 -- does not mark a whole scenario passed or establish external game accuracy.
 -- docs/VALIDATION_MATRIX.md shares the same stable IDs. No engine calls here.
 BankValidationCatalog = {
     schemaVersion = 1,
-    modVersion = "0.0.6",
+    modVersion = "0.0.7",
     defaultStatus = "NOT_EXERCISED",
     checks = {
         {id = "PKG-001", group = "PKG", evidence = "structural",
             description = "Release identity and root archive layout",
-            oracle = "ZIP root contains modDesc.xml; manifest, bootstrap and diagnostics agree on 0.0.6.",
+            oracle = "ZIP root contains modDesc.xml; manifest, bootstrap and diagnostics agree on 0.0.7.",
             procedure = "Run build/validator and inspect ZIP names and version fields.",
             logEvidence = "Build output, ZIP list, startup version.",
             relatedTests = "tools/build.py, tools/validate.py"},
@@ -1047,7 +1047,7 @@ BankValidationCatalog = {
             relatedTests = "tests/test_underwriting.lua"},
         {id = "DEBUG-001", group = "DEBUG", evidence = "manual",
             description = "Validation-release startup configuration",
-            oracle = "0.0.6 begins enabled with read tracing; config false or lbDebug off stops diagnostic work without disabling bank.",
+            oracle = "0.0.7 begins enabled with read tracing; config false or lbDebug off stops diagnostic work without disabling bank.",
             procedure = "Launch defaults, disable/re-enable, reload with config false on disposable install if needed.",
             logEvidence = "Configuration/mode transitions and quiet period.",
             relatedTests = "diagnostic/analyzer tests; see tests/run.lua"},

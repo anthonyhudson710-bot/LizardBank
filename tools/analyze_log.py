@@ -25,6 +25,10 @@ CATALOG_ROW = re.compile(
     r'\s*description\s*=\s*(?P<description>"(?:[^"\\]|\\.)*")', re.S)
 CAPABILITY_PATH = re.compile(r'^snapshot\["capabilities"\](?:\[.*\])?$')
 GATE_PATH = re.compile(r'^snapshot\["(?:finance|history|underwriting)"\]')
+HISTORY_EVENTS = {"history.transaction.begin", "history.transaction.end", "history.save.begin",
+                  "history.save.end", "history.native.begin", "history.native.return", "history.native.error",
+                  "history.save.sidecar.begin"}
+MAX_HISTORY_CALLS = 120000
 
 
 def integer(value):
@@ -83,7 +87,119 @@ def new_mission(run, mission_id):
             "summaries": 0, "lastSummaryLine": None, "lastCheckLine": None, "lastActivityLine": None,
             "_openCaptures": {}, "_openDumps": {}, "_summary": None,
             "_transactionIds": {origin: set() for origin in ORIGINS},
-            "_saveIds": {origin: set() for origin in ORIGINS}}
+            "_saveIds": {origin: set() for origin in ORIGINS}, "_historyCalls": {}, "_historyLimited": False}
+
+
+def read_history_call(mission, event, data, origin, ref):
+    """Correlate existing observer IDs without assuming each save-end is a save.
+
+    This proves transport ordering only. The observer's invocation trace cannot
+    establish that the engine completed its whole save or had no hidden effects.
+    """
+    if event not in HISTORY_EVENTS:
+        return
+    identity = data.get("transactionId")
+    if not integer(identity) or identity < 1:
+        problem(mission, "HISTORY_ID_UNAVAILABLE", "History event lacks a positive transaction ID; lifecycle cannot be correlated.", ref)
+        return
+    key = (origin, identity)
+    calls = mission["_historyCalls"]
+    if key not in calls:
+        if len(calls) >= MAX_HISTORY_CALLS:
+            if not mission["_historyLimited"]:
+                problem(mission, "HISTORY_CORRELATION_LIMIT", "History correlation exceeded its bounded ID budget; later lifecycles are unverified.", ref)
+                mission["_historyLimited"] = True
+            return
+        calls[key] = {"id": identity, "origin": origin, "first": ref, "begin": None, "end": None,
+                      "nativeBegin": None, "nativeEnd": None, "kind": None, "sidecars": {}, "valid": True}
+    row = calls[key]
+
+    def reject(code, message):
+        row["valid"] = False
+        problem(mission, code, "History ID %s (%s): %s" % (identity, origin, message), ref)
+
+    if event in ("history.transaction.begin", "history.save.begin"):
+        if row["begin"] is not None:
+            reject("HISTORY_DUPLICATE_BEGIN", "observer begin was recorded more than once.")
+            return
+        row["begin"], row["kind"] = ref, "save" if event == "history.save.begin" else "transaction"
+        parent_id = data.get("parentTransactionId")
+        if parent_id is not None:
+            parent = calls.get((origin, parent_id)) if integer(parent_id) else None
+            if parent_id == identity or parent is None or parent["begin"] is None or parent["end"] is not None:
+                reject("HISTORY_PARENT_UNAVAILABLE", "nested call has no active captured parent in the same origin.")
+        return
+    if row["begin"] is None:
+        reject("HISTORY_EVENT_WITHOUT_BEGIN", "event has no captured observer begin.")
+    if row["end"] is not None:
+        reject("HISTORY_EVENT_AFTER_END", "event followed the terminal observer end.")
+    if event == "history.native.begin":
+        if row["nativeBegin"] is not None:
+            reject("HISTORY_DUPLICATE_NATIVE_BEGIN", "more than one native invocation began for this observer ID.")
+        row["nativeBegin"] = ref
+    elif event in ("history.native.return", "history.native.error"):
+        if row["nativeBegin"] is None:
+            reject("HISTORY_NATIVE_RESULT_WITHOUT_BEGIN", "native result has no invocation begin.")
+        if row["nativeEnd"] is not None:
+            reject("HISTORY_DUPLICATE_NATIVE_RESULT", "native invocation has multiple result events.")
+        row["nativeEnd"], row["nativeSucceeded"] = ref, event == "history.native.return"
+        if data.get("nativeCallCount") != 1 or isinstance(data.get("nativeCallCount"), bool):
+            reject("HISTORY_NATIVE_CALL_COUNT", "native result does not declare exactly one invocation.")
+        if data.get("succeeded") is not row["nativeSucceeded"]:
+            reject("HISTORY_NATIVE_RESULT_CONFLICT", "native result event and success flag disagree.")
+    elif event == "history.save.sidecar.begin" or (event == "history.save.end" and data.get("stage") == "sidecar_write_returned"):
+        if row["kind"] != "save":
+            reject("HISTORY_KIND_CONFLICT", "sidecar event belongs to no captured save callback.")
+        if row["nativeEnd"] is None or row.get("nativeSucceeded") is not True:
+            reject("HISTORY_SIDECAR_BEFORE_NATIVE_SUCCESS", "sidecar stage lacks a preceding successful native callback return.")
+        farm_id = data.get("farmId")
+        if not integer(farm_id) or farm_id < 1:
+            reject("HISTORY_SIDECAR_FARM_UNAVAILABLE", "sidecar stage lacks its farm identity.")
+        else:
+            sidecar = row["sidecars"].setdefault(farm_id, {"begin": None, "end": None})
+            phase = "begin" if event == "history.save.sidecar.begin" else "end"
+            if sidecar[phase] is not None:
+                reject("HISTORY_DUPLICATE_SIDECAR_STAGE", "same farm sidecar stage occurred more than once.")
+            if phase == "end" and sidecar["begin"] is None:
+                reject("HISTORY_SIDECAR_END_WITHOUT_BEGIN", "sidecar result lacks its matching begin.")
+            sidecar[phase] = ref
+    else:
+        expected = "save" if event == "history.save.end" else "transaction"
+        if row["kind"] != expected:
+            reject("HISTORY_KIND_CONFLICT", "observer end kind differs from its begin.")
+        stage = data.get("stage")
+        if expected == "save" and stage not in (None, "native_callback_returned", "native_callback_error"):
+            reject("HISTORY_UNKNOWN_SAVE_STAGE", "unrecognized save end stage cannot establish terminal completion.")
+            return
+        if row["nativeEnd"] is None:
+            reject("HISTORY_END_WITHOUT_NATIVE_RESULT", "observer ended without its native result.")
+        elif "succeeded" in data and data["succeeded"] is not row.get("nativeSucceeded"):
+            reject("HISTORY_END_RESULT_CONFLICT", "observer and native success flags disagree.")
+        if stage == "native_callback_error" and row.get("nativeSucceeded") is not False:
+            reject("HISTORY_END_RESULT_CONFLICT", "save error stage lacks a native error result.")
+        if stage == "native_callback_returned" and row.get("nativeSucceeded") is not True:
+            reject("HISTORY_END_RESULT_CONFLICT", "save return stage lacks a native return result.")
+        row["end"] = ref
+
+
+def finish_history_calls(mission):
+    summary = {origin: {"observedIds": 0, "completeLifecycles": 0, "incompleteLifecycles": 0} for origin in ORIGINS}
+    for row in mission["_historyCalls"].values():
+        counts = summary[row["origin"]]
+        counts["observedIds"] += 1
+        for field, code in (("begin", "HISTORY_MISSING_BEGIN"), ("nativeBegin", "HISTORY_MISSING_NATIVE_BEGIN"),
+                            ("nativeEnd", "HISTORY_MISSING_NATIVE_RESULT"), ("end", "HISTORY_MISSING_END")):
+            if row[field] is None:
+                row["valid"] = False
+                problem(mission, code, "History ID %s (%s) lacks %s in this log; this is incomplete evidence, not proof of an engine defect." %
+                        (row["id"], row["origin"], field), row["first"])
+        for farm_id, sidecar in row["sidecars"].items():
+            if sidecar["end"] is None:
+                row["valid"] = False
+                problem(mission, "HISTORY_MISSING_SIDECAR_END", "Save ID %s (%s), farm %s lacks its sidecar result." %
+                        (row["id"], row["origin"], farm_id), sidecar["begin"])
+        counts["completeLifecycles" if row["valid"] else "incompleteLifecycles"] += 1
+    mission["historyCorrelation"] = summary
 
 
 def origin_of(record, data):
@@ -283,11 +399,13 @@ def read_event(mission, record, ref, raw):
         mission["_transactionIds"][origin].add(data["transactionId"])
     if event == "history.save.begin" and integer(data.get("transactionId")):
         mission["_saveIds"][origin].add(data["transactionId"])
-    if event.endswith(".error") or event.endswith(".recordError") or data.get("succeeded") is False or data.get("written") is False:
+    read_history_call(mission, event, data, origin, ref)
+    if event.endswith(".error") or event.endswith(".recordError") or data.get("succeeded") is False or data.get("written") is False or data.get("nativeReturnedFalse") is True:
         mission["failureEvidence"].append({**ref, "data": data, "raw": raw})
 
 
 def finish_mission(mission, catalog):
+    finish_history_calls(mission)
     pre_mission = mission["mission"] == 0
     mission["context"] = "pre-mission diagnostics" if pre_mission else "mission"
     if not mission["began"] and not pre_mission:
@@ -448,7 +566,12 @@ def render_markdown(report):
                 "| Origin | Transaction IDs | Save IDs | Transaction end events | Save end events | Period-close events | Resume events |", "| --- | ---: | ---: | ---: | ---: | ---: | ---: |"]
             for origin, activity in mission["activity"].items():
                 out.append("| %s | %s |" % (origin, " | ".join(str(value) for value in activity.values())))
-            out += ["", "These are observed events, not completed test scenarios. Save-end stages may occur more than once per save; a logged period close alone does not prove twelve complete, reconciled seasonal periods.", "", "### Captures", ""]
+            out += ["", "These are observed events, not completed test scenarios. Save-end stages may occur more than once per save; a logged period close alone does not prove twelve complete, reconciled seasonal periods.", "",
+                        "### History call correlation", "", "Each complete lifecycle pairs one observer begin, one native invocation/result and its terminal end. Sidecar stages are matched per farm; nested calls have separate IDs. This is transport evidence, not proof of whole native save completion.", "",
+                        "| Origin | Observed IDs | Complete lifecycles | Incomplete lifecycles |", "| --- | ---: | ---: | ---: |"]
+            for origin, counts in mission["historyCorrelation"].items():
+                out.append("| %s | %s |" % (origin, " | ".join(str(value) for value in counts.values())))
+            out += ["", "### Captures", ""]
             for capture in mission["captures"]:
                 out.append("- Capture %s (%s), %s: %s; %s." % (capture["id"], capture["origin"], inline(capture.get("reason")), "end recorded" if capture["complete"] else "INCOMPLETE", where(capture["begin"])))
             if not mission["captures"]:

@@ -64,6 +64,11 @@ function BankScreen:onClickRefresh()
     end)
     if ok then
         self.pages = result
+        if BankDiagnostics ~= nil and BankDiagnostics.isEnabled() then
+            -- Preserve prepared text for every page, including unvisited pages.
+            -- Rendering geometry and native navigation still need manual checks.
+            BankDiagnostics.dump("reportPages", result)
+        end
         if BankDiagnostics ~= nil and BankDiagnostics.isEnabled() and BankValidation ~= nil then
             local valid, message = pcall(BankValidation.pages, result, BankReport.LINES_PER_PAGE, BankDiagnostics.check)
             BankDiagnostics.check("GUI_PAGE_VALIDATOR", valid and "PASS" or "FAIL", {error = not valid and tostring(message) or nil})

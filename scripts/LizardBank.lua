@@ -1,7 +1,7 @@
 -- Mission lifecycle, native input integration and the shared bank entry point.
 -- Asset scans occur on demand; lightweight money/calendar observation is separate.
 LizardBank = {
-    VERSION = "0.0.6",
+    VERSION = "0.0.7",
     GUI_NAME = "LizardBank",
     modName = g_currentModName or "FS25_LizardBank",
     modDirectory = g_currentModDirectory or "",

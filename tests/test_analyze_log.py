@@ -319,6 +319,104 @@ class AnalyzerTests(unittest.TestCase):
         log = Log().begin().snapshot().summary().add("history.transaction.begin", {"transactionId": 9}).add("mission.end")
         self.assertIn("STALE_SUMMARY", codes(log.report()))
 
+    def test_history_nested_passthrough_and_origins_correlate_independently(self):
+        log = Log().begin().snapshot()
+        for origin in ("runtime", "synthetic"):
+            log.add("history.transaction.begin", {"transactionId": 1, "kind": "loan"}, origin)
+            log.add("history.native.begin", {"transactionId": 1}, origin)
+            log.add("history.transaction.begin", {"transactionId": 2, "parentTransactionId": 1, "path": "nested_accounted_by_parent"}, origin)
+            log.add("history.native.begin", {"transactionId": 2}, origin)
+            log.add("history.native.return", {"transactionId": 2, "nativeCallCount": 1, "succeeded": True}, origin)
+            log.add("history.transaction.end", {"transactionId": 2, "observed": False, "succeeded": True}, origin)
+            log.add("history.native.return", {"transactionId": 1, "nativeCallCount": 1, "succeeded": True}, origin)
+            log.add("history.transaction.end", {"transactionId": 1, "observed": True, "succeeded": True}, origin)
+        report = log.finish().report()
+        self.assertEqual(report["integrity"], "CAPTURED")
+        for origin in ("runtime", "synthetic"):
+            self.assertEqual(mission(report)["historyCorrelation"][origin]["completeLifecycles"], 2)
+        self.assertIn("History call correlation", analyzer.render_markdown(report))
+
+    def test_history_multiple_farm_sidecar_stages_are_one_save_lifecycle(self):
+        log = Log().begin().snapshot().add("history.save.begin", {"transactionId": 8})
+        log.add("history.native.begin", {"transactionId": 8})
+        log.add("history.native.return", {"transactionId": 8, "nativeCallCount": 1, "succeeded": True})
+        for farm_id in (7, 12):
+            log.add("history.save.sidecar.begin", {"transactionId": 8, "farmId": farm_id})
+            log.add("history.save.end", {"transactionId": 8, "stage": "sidecar_write_returned", "farmId": farm_id, "written": True})
+        log.add("history.save.end", {"transactionId": 8, "stage": "native_callback_returned", "nativeReturnedFalse": False})
+        report = log.finish().report()
+        self.assertEqual(report["integrity"], "CAPTURED")
+        self.assertEqual(mission(report)["historyCorrelation"]["runtime"]["completeLifecycles"], 1)
+        self.assertEqual(mission(report)["activity"]["runtime"]["saveEndEvents"], 3)
+
+    def test_history_native_error_and_save_false_preserve_failure_without_broken_pairing(self):
+        log = Log().begin().snapshot().add("history.save.begin", {"transactionId": 1})
+        log.add("history.native.begin", {"transactionId": 1})
+        log.add("history.native.error", {"transactionId": 1, "nativeCallCount": 1, "succeeded": False})
+        log.add("history.save.end", {"transactionId": 1, "stage": "native_callback_error", "succeeded": False})
+        log.add("history.save.begin", {"transactionId": 2})
+        log.add("history.native.begin", {"transactionId": 2})
+        log.add("history.native.return", {"transactionId": 2, "nativeCallCount": 1, "succeeded": True})
+        log.add("history.save.end", {"transactionId": 2, "stage": "native_callback_returned", "nativeReturnedFalse": True})
+        report = log.finish().report()
+        self.assertEqual(report["integrity"], "CAPTURED")
+        self.assertEqual(mission(report)["historyCorrelation"]["runtime"]["completeLifecycles"], 2)
+        self.assertTrue(any(row["data"].get("nativeReturnedFalse") for row in mission(report)["failureEvidence"]))
+
+    def test_history_duplicate_invocation_result_begin_and_end_are_detected(self):
+        log = Log().begin().snapshot()
+        for _ in range(2):
+            log.add("history.transaction.begin", {"transactionId": 1})
+            log.add("history.native.begin", {"transactionId": 1})
+            log.add("history.native.return", {"transactionId": 1, "nativeCallCount": 1, "succeeded": True})
+            log.add("history.transaction.end", {"transactionId": 1, "succeeded": True})
+        report = log.finish().report()
+        self.assertTrue({"HISTORY_DUPLICATE_BEGIN", "HISTORY_DUPLICATE_NATIVE_BEGIN", "HISTORY_DUPLICATE_NATIVE_RESULT", "HISTORY_EVENT_AFTER_END"}.issubset(codes(report)))
+        self.assertEqual(mission(report)["historyCorrelation"]["runtime"]["completeLifecycles"], 0)
+
+    def test_history_missing_terminal_and_orphan_result_never_complete(self):
+        log = Log().begin().snapshot().add("history.transaction.begin", {"transactionId": 1})
+        log.add("history.native.begin", {"transactionId": 1})
+        log.add("history.native.return", {"transactionId": 2, "nativeCallCount": 1, "succeeded": True})
+        log.add("history.transaction.end", {"transactionId": 3})
+        report = log.finish().report()
+        self.assertTrue({"HISTORY_MISSING_END", "HISTORY_MISSING_NATIVE_RESULT", "HISTORY_EVENT_WITHOUT_BEGIN", "HISTORY_NATIVE_RESULT_WITHOUT_BEGIN", "HISTORY_END_WITHOUT_NATIVE_RESULT"}.issubset(codes(report)))
+        self.assertEqual(mission(report)["historyCorrelation"]["runtime"]["incompleteLifecycles"], 3)
+
+    def test_history_invalid_parent_origin_and_result_mismatches_are_not_trusted(self):
+        log = Log().begin().snapshot().add("history.transaction.begin", {"transactionId": 1}, "synthetic")
+        log.add("history.transaction.begin", {"transactionId": 2, "parentTransactionId": 1})
+        log.add("history.native.begin", {"transactionId": 2})
+        log.add("history.native.return", {"transactionId": 2, "nativeCallCount": 2, "succeeded": False})
+        log.add("history.save.end", {"transactionId": 2, "stage": "native_callback_error", "succeeded": False})
+        report = log.finish().report()
+        self.assertTrue({"HISTORY_PARENT_UNAVAILABLE", "HISTORY_NATIVE_CALL_COUNT", "HISTORY_NATIVE_RESULT_CONFLICT", "HISTORY_KIND_CONFLICT", "HISTORY_END_RESULT_CONFLICT"}.issubset(codes(report)))
+
+    def test_history_sidecar_missing_or_duplicate_stages_and_missing_identity(self):
+        log = Log().begin().snapshot().add("history.save.begin", {"transactionId": 1})
+        log.add("history.save.sidecar.begin", {"transactionId": 1, "farmId": 7})
+        log.add("history.save.sidecar.begin", {"transactionId": 1, "farmId": 7})
+        log.add("history.save.end", {"transactionId": 1, "stage": "sidecar_write_returned", "farmId": 9})
+        log.add("history.save.end", {"transactionId": 1, "stage": "sidecar_write_returned"})
+        log.add("history.transaction.end", {"transactionId": True})
+        report = log.finish().report()
+        self.assertTrue({"HISTORY_SIDECAR_BEFORE_NATIVE_SUCCESS", "HISTORY_DUPLICATE_SIDECAR_STAGE", "HISTORY_MISSING_SIDECAR_END", "HISTORY_SIDECAR_END_WITHOUT_BEGIN", "HISTORY_SIDECAR_FARM_UNAVAILABLE", "HISTORY_ID_UNAVAILABLE"}.issubset(codes(report)))
+
+    def test_history_correlation_bounded_and_unknown_stage_cannot_finish_save(self):
+        old_limit = analyzer.MAX_HISTORY_CALLS
+        analyzer.MAX_HISTORY_CALLS = 1
+        try:
+            log = Log().begin().snapshot().add("history.save.begin", {"transactionId": 1})
+            log.add("history.save.end", {"transactionId": 1, "stage": "future_unknown_stage"})
+            for identity in (2, 3, 4):
+                log.add("history.transaction.begin", {"transactionId": identity})
+            report = log.finish().report()
+            self.assertTrue({"HISTORY_UNKNOWN_SAVE_STAGE", "HISTORY_CORRELATION_LIMIT", "HISTORY_MISSING_END"}.issubset(codes(report)))
+            self.assertEqual(mission(report)["historyCorrelation"]["runtime"]["observedIds"], 1)
+            self.assertEqual(sum(p["code"] == "HISTORY_CORRELATION_LIMIT" for p in mission(report)["problems"]), 1)
+        finally:
+            analyzer.MAX_HISTORY_CALLS = old_limit
+
     def test_duplicate_json_key_cannot_overwrite_failure_claim(self):
         log = Log().begin()
         log.lines.append(analyzer.PREFIX + ' {"schema":1,"seq":2,"mission":1,"capture":0,"event":"check","origin":"runtime","data":{"id":"C","outcome":"FAIL","outcome":"PASS"}}')

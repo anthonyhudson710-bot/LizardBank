@@ -14,6 +14,21 @@ local function clock()
     end
 end
 
+local function releaseHandle(xml, path, operation)
+    if xml == nil or xml == 0 then return nil end
+    -- Observe the existing single release attempt without changing persistence
+    -- results or retrying an engine handle whose state is now unknown.
+    local ok, err = pcall(delete, xml)
+    local proof = {filename = filename(path), operation = operation, attempted = true, callSucceeded = ok,
+        scope = "Native delete call returned without throwing; handle destruction is not independently verified"}
+    if not ok then
+        proof.error = type(err) == "string" and err:sub(1, 256) or ("Non-string release error: " .. type(err))
+    end
+    diagnostic("emit", "history.xml.release", proof)
+    diagnostic("check", "HISTORY_XML_RELEASE", ok and "PASS" or "FAIL", proof)
+    return ok
+end
+
 -- Compare the serialized contract only. Source labels and session diagnostics
 -- are deliberately not persisted and therefore cannot prove XML integrity.
 local function verifyReadback(expected, actual)
@@ -169,8 +184,9 @@ function BankHistoryStore.write(path, ledger)
         diagnostic("read", "history", "saveXMLFile", saved == true, saved, {filename = filename(path), stage = "sidecar_write_acknowledgement"})
         assert(saved == true, "History XML save success was not confirmed")
     end)
-    if xml ~= nil and xml ~= 0 then pcall(delete, xml) end
-    diagnostic("emit", "history.xml.write", {filename = filename(path), succeeded = ok, handleReleaseAttempted = xml ~= nil and xml ~= 0})
+    local released = releaseHandle(xml, path, "write")
+    diagnostic("emit", "history.xml.write", {filename = filename(path), succeeded = ok,
+        handleReleaseAttempted = xml ~= nil and xml ~= 0, handleReleaseCallSucceeded = released})
     diagnostic("check", "HISTORY_XML_WRITE", ok and "PASS" or "FAIL", {filename = filename(path), acknowledged = ok, scope = "Bank sidecar write only"})
     if ok then
         if BankHistory.diagnosticsEnabled() then pcall(debugReadback, path, ledger) end
@@ -220,9 +236,9 @@ function BankHistoryStore.read(path)
         end
         return ledger
     end)
-    if xml ~= nil and xml ~= 0 then pcall(delete, xml) end
+    local released = releaseHandle(xml, path, "read")
     diagnostic("emit", "history.xml.read", {filename = filename(path), succeeded = ok,
-        handleReleaseAttempted = xml ~= nil and xml ~= 0, farmId = ok and result.farmId or nil,
+        handleReleaseAttempted = xml ~= nil and xml ~= 0, handleReleaseCallSucceeded = released, farmId = ok and result.farmId or nil,
         retainedPeriods = ok and #result.periods or nil, reason = not ok and "Bounded XML decode rejected sidecar" or nil})
     if ok then return result, nil end
     return nil, tostring(result)

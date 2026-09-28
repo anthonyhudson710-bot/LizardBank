@@ -1,10 +1,10 @@
-# Lizard Bank 0.0.6 — validation build
+# Lizard Bank 0.0.7 — validation build
 
 A single-player FS25 farm financial report with retained game records, ongoing cash-flow history, seasonal cash scenarios and an explainable creditworthiness model. Asset coverage includes cash, native debt, owned farmland, equipment, buildings, stored-goods quantities and livestock.
 
 **Audit reset: all earlier in-game success reports are treated as unverified.** This release adds structured validation throughout the existing financial pipeline. It observes money movements and writes its own history alongside the normal game save. It does not change money, debt or ownership, or issue loans. Debug logging starts automatically in this validation package; `lbDebug off` disables it.
 
-The source workspace includes **190 validation scenarios**, detailed subcases and independent-oracle requirements in [docs/VALIDATION_MATRIX.md](docs/VALIDATION_MATRIX.md). The catalog is exhaustive for the explicitly listed current contracts; it cannot prove every unknown map/mod combination. **A clean log is not an automatic pass:** missing gameplay paths remain NOT_EXERCISED, unavailable values stay unavailable, and truncated logs remain incomplete.
+Start with [test.md](test.md) for the complete ordered test run, all **190 validation scenarios**, detailed category/boundary subcases, a code/resource map and the named local-test inventory. [docs/VALIDATION_MATRIX.md](docs/VALIDATION_MATRIX.md) retains the scenario reference. The catalog covers the explicitly listed current contracts; it cannot prove every unknown map/mod combination. **A clean log is not an automatic pass:** missing gameplay paths remain NOT_EXERCISED, unavailable values stay unavailable, and truncated logs remain incomplete.
 
 ## Minimal validation run
 
@@ -19,7 +19,7 @@ The source workspace includes **190 validation scenarios**, detailed subcases an
 
 The analyzer separates internal checks, synthetic probes, manual comparisons, transport gaps, failures and unexercised scenarios. It retains failures even if a later observation passes. No log upload occurs automatically.
 
-Logs include raw scalar reads, selected sources, ownership/exclusion decisions, captured items and totals, before/after cash and debt, transaction nesting, save readback, resume anchors, forecast sources, scoring gates/formulas, GUI text, and lifecycle events. This can expose wrong totals and broken assumptions with little manual bookkeeping. It cannot independently verify missing native registries, a truthful manual value, actual visual clipping/controller feel, or an unplayed full seasonal cycle.
+Logs include raw scalar reads, selected sources, ownership/exclusion decisions, captured items and totals, before/after cash and debt, transaction nesting, XML handle-release results, save readback, resume anchors, forecast sources, scoring gates/formulas, every prepared GUI page and lifecycle events. The analyzer correlates transaction/native-call stages to expose duplicate, orphaned and missing events. This can expose wrong totals and broken assumptions with little manual bookkeeping. It cannot independently verify missing native registries, a truthful manual value, actual visual clipping/controller feel, or an unplayed full seasonal cycle.
 
 Pure ledger/model probes run once in the game's Lua host with **origin=synthetic** and **SYNTHETIC_** check IDs. They touch no mission, time, money or save files and never count as real seasonal/save coverage. Runtime observations use **origin=runtime**. Collection remains observational; debug-only XML readback reads the bank's own sidecar after a save acknowledgement.
 
@@ -81,7 +81,7 @@ Run from the source directory:
 ```sh
 python3 tools/validate.py
 lua5.1 tests/run.lua
-python3 -m unittest discover -s tests -p 'test_analyze_log.py'
+python3 -m unittest discover -s tests -p 'test_*.py'
 python3 tools/build.py
 ```
 
