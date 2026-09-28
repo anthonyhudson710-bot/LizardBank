@@ -35,11 +35,21 @@
         <text name="lb_inventoryProduction" text="Production storage" />
         <text name="lb_inventoryVehicle" text="Equipment fill unit" />
         <text name="lb_inventoryPallet" text="Pallet or big bag" />
+        <text name="lb_inventoryBale" text="Physical bale" />
+        <text name="lb_inventoryStoredBale" text="Bale in object storage" />
+        <text name="lb_inventoryStoredPallet" text="Pallet in object storage" />
+        <text name="lb_inventoryStoredObject" text="Stored object; contents not identified" />
+        <text name="lb_inventoryObjectCount" text="Physical or stored objects in this entry: %s" />
+        <text name="lb_inventoryObjectCoverage" text="Physical bales: %s | Bale/pallet stores: %s" />
+        <text name="lb_coverageAvailable" text="Checked" />
+        <text name="lb_coveragePartial" text="Partial" />
+        <text name="lb_fermenting" text="Fermenting: %s%%; quantity reflects current contents." />
+        <text name="lb_fermentingUnknown" text="Fermenting; progress unavailable. Current contents are shown." />
         <text name="lb_inventoryUnavailable" text="Stored-goods coverage is unavailable. Zero must not be assumed." />
         <text name="lb_inventoryNoItems" text="No nonempty goods recorded in the containers checked; coverage is partial." />
         <text name="lb_inventoryBasis" text="Quantities only; no separate inventory value is added to the asset subtotal." />
         <text name="lb_inventoryProvenance" text="Container ownership does not prove cargo ownership, including contract crops." />
-        <text name="lb_inventoryMissing" text="Bales, virtual bale/pallet storage and unsupported mod storage are omitted." />
+        <text name="lb_inventoryMissing" text="Bunker/ground heaps, construction stock and unsupported mod storage are omitted." />
         <text name="lb_partialAssets" text="Known covered assets, including cash (partial): %s" />
         <text name="lb_area" text="Known parcel area: %s" />
         <text name="lb_landCount" text="Owned parcels recorded: %s" />

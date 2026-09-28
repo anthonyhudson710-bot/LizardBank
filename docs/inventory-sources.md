@@ -1,4 +1,4 @@
-# Inventory quantities: 0.0.2
+# Inventory quantities: 0.0.3
 
 This adapter observes holdings; it does not price inventory or prove title to
 cargo. A farmer-owned or leased trailer can carry contract crop. Every item
@@ -21,7 +21,13 @@ against the user's FS25 version.
 | Vehicles and pallets | [FillUnit](https://gdn.giants-software.com/documentation_scripting_fs25.php?category=78&class=672&version=script): getFillUnits(), getFillUnitFillLevel(index), and getFillUnitFillType(index). Raw quantities are liters unless the fill unit specifies unitText. That field is a native text override with no quantity conversion. Shop display conversion is deliberately not applied to raw quantities. Equipment property state must be OWNED or LEASED; MISSION state is excluded. |
 | Fill names | [FillTypeManager](https://gdn.giants-software.com/documentation_scripting_fs25.php?category=36&class=409&version=script): getFillTypeByIndex() provides the internal name and localized title. Unknown types retain their known quantity with a metadata finding. No universal product/supply classification is inferred from a fill-type name. |
 | Mounted saplings | [TreePlanter](https://gdn.giants-software.com/documentation_scripting_fs25.php?category=78&class=813&version=script): its fill getter can proxy mountedSaplingPallet. Skip that specific planter unit so the separately enumerated pallet supplies the single holding. |
-| Virtual object storage | [PlaceableObjectStorage](https://gdn.giants-software.com/documentation_scripting_fs25.php?category=78&class=751&version=script): abstract storedObjects can expose getRealObject(). These real display objects are excluded from the vehicle pass. The virtual contents are explicitly outside 0.0.2 coverage; owning a store produces an omission finding. |
+| Bale and object storage | [Stored-object sources](stored-object-sources.md) describe the new adapter. It reads physical bales and real stored counterparts once, and records unsupported virtual quantities as unavailable. Stored counterparts are excluded from subsequent vehicle and loose-bale scans. |
+
+## Bale-handler overlap
+
+- [StrawBlower](https://gdn.giants-software.com/documentation_scripting_fs25.php?category=78&class=802&version=script) mirrors currentBale in its fillUnitIndex. Skip that unit; the registered physical bale supplies the quantity. A missing registry counterpart creates a finding.
+- [BaleLoader](https://gdn.giants-software.com/documentation_scripting_fs25.php?category=78&class=635&version=script) uses its active fillUnitIndex as a count of bales, not additional liters. That unit is excluded; unrelated units remain readable.
+- [Baler](https://gdn.giants-software.com/documentation_scripting_fs25.php?category=78&class=636&version=script) can retain a full round chamber beside its physical bale. Early partial ejection temporarily inflates it before lastBaleFillLevel is applied on dropping. A chamber with hasUnloadingAnimation and a physical bale or pending partial-ejection amount is omitted with a refresh finding, along with its corresponding main fill unit. Independent buffer material and square-baler material for the next bale remain. Suppression uses both object identity and unique ID.
 
 ## Compatibility boundary
 
@@ -59,9 +65,9 @@ BankInventoryDataSource.collect(snapshot, context) creates snapshot.inventory:
 - unknownCount: incomplete records or metadata findings; this is not a count of
   unowned assets or an estimate of missing stock.
 - excludedCount: detected borrowed sources, unfinished production sources,
-  owned object-storage placeables, and proxy units intentionally excluded.
-- coverage: adapter statuses for storage, production, vehicle; bales and
-  objectStorage are excluded.
+  removed objects, contract bales, and proxy units intentionally excluded.
+- coverage: adapter statuses for storage, production, vehicle, bales and
+  objectStorage; available means that adapter's supported reads completed.
 - status: partial when any covered adapter is readable, unavailable when none
   can be inspected. It never claims complete inventory coverage.
 
@@ -75,7 +81,7 @@ monetary valuation, forecast, or product/supply classification is created.
 
 ## Known gaps and runtime checks
 
-Loose/spawned bales, abstract bale/pallet storage, bunker and ground heaps,
+Virtual quantities without a verified real counterpart, bunker and ground heaps,
 standing crop, animals, timber, construction stock, and custom stock systems
 without a supported adapter remain outside coverage. Animal feed/products can
 appear only when exposed through an enumerated, farm-owned Storage; this does
@@ -86,5 +92,5 @@ The Windows check must reconcile a silo, an extension, owned production input
 and output, a loaded trailer, a pallet/big bag, and a leased trailer. Moving a
 known quantity between a trailer and silo must move its observed location
 without duplicating it. Verify empty storage versus missing data, mounted
-saplings, object-storage omissions, and new snapshots after save/reload. These
-runtime checks are pending for 0.0.2.
+saplings, object-storage quantities and omissions, and new snapshots after save/reload.
+The user confirmed v0.0.2 successful; v0.0.3 bale/storage additions remain pending.

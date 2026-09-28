@@ -1,25 +1,27 @@
-# Windows test: 0.0.2
+# Windows test: 0.0.3
 
-Status: **0.0.1 user-confirmed working; 0.0.2 additions pending**. On 2026-09-27
-the user reported that the first build worked; their supplied log identifies
-FS25 1.23.1.0. Individual test-case results were not retained. The checklist below
-is for this update. Local tests cannot establish in-game behavior.
+Status: **0.0.1 and 0.0.2 user-confirmed working; 0.0.3 additions pending**.
+The confirmations were received on 2026-09-27. The first supplied log identifies
+FS25 1.23.1.0; the second shows Arkansas 4X and no new problem categories in its
+comparison view. Individual test-case results were not retained. The checklist
+below is for this update. Local tests cannot establish in-game behavior.
 
 ## Focus for this update
 
-1. Check owned shed, silo, and production building names and values. Include an
-   unowned business to check exclusion. Monetary value need not equal a temporary
-   construction undo refund or promise that the building can be sold.
-2. Compare silo, extension, production input/output, trailer and pallet/big-bag
-   quantities with the corresponding game displays. Include a leased trailer.
-3. Transfer a known amount between a trailer and silo, then Refresh. The quantity
-   should move location without appearing twice. Inventory adds no separate money
-   to the subtotal. Contract cargo must not be claimed as proven farm property.
-4. Check a mounted sapling pallet and a virtual bale/pallet store if available.
-   Mounted saplings should appear once; virtual contents and bales are explicitly
-   outside coverage.
-5. Buy/sell a building, empty/remove a stock container, Refresh, save/reload, and
-   switch to another save. Removed assets and old quantities must disappear.
+1. Compare loose bales and bales on a loader with the game's quantities; exclude
+   contract bales and other farms' bales. Loaded bales should appear once, and a
+   loader's bale count must not appear as extra liters.
+2. Deposit/retrieve a bale and pallet at a bale/pallet store, then Refresh.
+   Readable quantities move between the store and physical inventory once.
+   Unsupported virtual entries must show a count and unavailable quantity.
+3. Compare a fermenting wrapped bale before/after fermentation completes.
+   The bank must retain its current fill type until the game actually changes it.
+4. Load and consume a bale in a straw blower. The blower and physical-bale paths
+   must not duplicate its quantity. Test round and square balers if available:
+   the ambiguous round chamber is omitted during discharge; after dropping,
+   Refresh restores its actual quantity. Independent buffer material remains.
+5. Sell/use a bale, Refresh, save/reload, and switch saves. Confirm stock and the
+   original cash, land, equipment, buildings and window behavior remain current.
 
 ## Install and record
 
@@ -37,7 +39,7 @@ is for this update. Local tests cannot establish in-game behavior.
 
 | Check | Expected result | Status |
 | --- | --- | --- |
-| Mod selection | Lizard Bank 0.0.2 and its icon appear; save loads without new errors. | Pending |
+| Mod selection | Lizard Bank 0.0.3 and its icon appear; save loads without new errors. | Pending |
 | Open / close | Right Ctrl+B (remappable Open Lizard Bank action) opens the window; Back/Escape closes it; normal player controls resume. | Pending |
 | Controller | Bind Open Lizard Bank in Controls; navigate controls, change report page, Refresh and close without the mouse. | Pending |
 | Repeated opening | Ten open/close cycles produce no duplicate input callbacks, stuck controls, or extra windows. | Pending |
@@ -49,10 +51,14 @@ is for this update. Local tests cannot establish in-game behavior.
 | Loaded trailers | Compare empty versus loaded equipment. Included contents are disclosed and are not counted again as separate inventory. | Pending |
 | Buildings | Owned registered placeables appear once with monetary values; missing values remain unavailable and known sale vetoes are disclosed. | Pending |
 | Stored goods | Supported storage and fill-unit quantities reconcile, use correct units, and identify the container; leased equipment value is still excluded. | Pending |
+| Physical bales | Owned loose/loaded bales appear once with current quantity and type; contract bales are excluded. | Pending |
+| Object stores | Stored counterparts appear at the store once; unsupported virtual quantities stay unavailable with known object counts. | Pending |
+| Fermentation | Current contents and progress match the game; future silage is not invented. | Pending |
+| Bale handlers | Loader/blower proxies do not duplicate bales; round-chamber transitions are disclosed and settle after dropping/Refresh. | Pending |
 | Stock transfers | Moving goods between supported containers changes location without duplication; zero and unavailable data remain distinct. | Pending |
 | Removal | Sold buildings and removed containers disappear on Refresh, including their lingering storage registry aliases. | Pending |
 | Refresh | Borrow/repay; buy/sell equipment and land; lease/return equipment. Each deliberate change appears after Refresh. | Pending |
-| Partial coverage | Inventory is quantity-only; bales, virtual stores, unsupported stock, animals, standing crop, timber and external finance gaps are visible. No full-net-worth or credit-grade claim. | Pending |
+| Partial coverage | Inventory is quantity-only; unsupported virtual quantities, other stock, animals, standing crop, timber and external finance gaps are visible. No full-net-worth or credit-grade claim. | Pending |
 | Save / reload | Save and reload the same game; report matches current finances and does not contain stale items. | Pending |
 | Second save | Return to the main menu and load another farm without restarting FS25; report reflects that save only, with one working action binding. | Pending |
 | Read-only behavior | Opening or refreshing the report does not move money, change debt/ownership, or add custom savegame files. Normal simulation expenses may continue. | Pending |

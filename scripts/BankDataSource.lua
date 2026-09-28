@@ -43,6 +43,7 @@ local function runtimeContext()
         g_fillTypeManager = g_fillTypeManager,
         FarmManager = FarmManager,
         FillType = FillType,
+        Bale = Bale,
         VehiclePropertyState = VehiclePropertyState,
         g_gameVersion = g_gameVersion,
         g_gameVersionDisplay = g_gameVersionDisplay

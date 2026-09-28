@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8" standalone="no"?>
 <modDesc descVersion="93">
     <author>Lizard Bank</author>
-    <version>0.0.2</version>
+    <version>0.0.3</version>
     <title><en>Lizard Bank</en></title>
     <description>
         <en><![CDATA[A financial snapshot of your farm: cash, native debt, owned land, equipment, buildings and stored-goods quantities.
@@ -13,6 +13,7 @@ Values cover only the listed assets; this preview does not calculate a credit gr
     <l10n filenamePrefix="l10n/l10n"/>
     <extraSourceFiles>
         <sourceFile filename="scripts/BankPropertyDataSource.lua"/>
+        <sourceFile filename="scripts/BankStoredObjectDataSource.lua"/>
         <sourceFile filename="scripts/BankInventoryDataSource.lua"/>
         <sourceFile filename="scripts/BankDataSource.lua"/>
         <sourceFile filename="scripts/BankReport.lua"/>

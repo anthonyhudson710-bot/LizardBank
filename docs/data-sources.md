@@ -1,6 +1,6 @@
 # Snapshot sources and evidence
 
-This file separates published FS25 evidence from compatibility candidates. On 2026-09-27 the user confirmed that v0.0.1 worked in FS25 1.23.1.0. This confirms the reported overall result, not which getter/fallback supplied each value; no complete diagnostic trace or per-case result was retained. Local injected tests validate collector behavior, not engine compatibility. The v0.0.2 additions await Windows verification.
+This file separates published FS25 evidence from compatibility candidates. On 2026-09-27 the user confirmed that v0.0.1 and v0.0.2 worked. The first log identifies FS25 1.23.1.0; the second shows Arkansas 4X loading. These confirm the reported overall results, not which getter/fallback supplied each value; no complete diagnostic trace or per-case result was retained. Local injected tests validate collector behavior, not engine compatibility. The v0.0.3 additions await Windows verification.
 
 | Input | Read path | Evidence and meaning |
 | --- | --- | --- |
@@ -21,9 +21,11 @@ Known pallet markers (`isPallet`, `spec_pallet`), big bags (`spec_bigBag`), and 
 
 Section status is `available`, `partial`, or `unavailable`. Cash/debt use `available` or `unavailable`. An available section means its supported reads completed, not that it covers all farm wealth. Partial sums include known values only. A sum with no verified values is unavailable, except when enumeration verifies that the supported collection is empty. No snapshot holds references to mission/farm/vehicle objects. Failures are isolated by accessor, record, and section.
 
-`BankDataSource.capture(context)` accepts a table keyed by engine global names for local tests. Without a context, it reads the actual engine globals, including `g_fillTypeManager` and `FillType` for quantities. The result has `schemaVersion = 2` and plain serializable tables: `farm`, `capturedAt`, `cash`, `debt`, `land`, `equipment`, `buildings`, `inventory`, `issues`, `capabilities`, and `gameVersion`. Capability values are scalar and diagnostic; missing APIs do not become zero-valued financial facts.
+`BankDataSource.capture(context)` accepts a table keyed by engine global names for local tests. Without a context, it reads the actual engine globals, including `g_fillTypeManager`, `FillType`, and `Bale` for quantities. The result has `schemaVersion = 2` and plain serializable tables: `farm`, `capturedAt`, `cash`, `debt`, `land`, `equipment`, `buildings`, `inventory`, `issues`, `capabilities`, and `gameVersion`. Version 0.0.3 extends inventory rows additively with object counts and fermentation metadata. Capability values are scalar and diagnostic; missing APIs do not become zero-valued financial facts.
 
 The added modules are isolated collection sections. [Building sources](property-sources.md) document monetary value versus sale eligibility and temporary refunds. [Inventory sources](inventory-sources.md) document strict storage attribution, quantities, deduplication, and exclusions. Inventory quantities never contribute separate monetary value to the asset subtotal.
+
+[Stored-object sources](stored-object-sources.md) document physical bales, readable stored counterparts, and explicit unknown virtual quantities. Native bale-handler proxy units are excluded to avoid counting the same object again as machine material.
 
 ## Primary references inspected
 

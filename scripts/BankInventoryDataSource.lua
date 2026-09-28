@@ -60,7 +60,7 @@ local function rememberStorage(storage, seen, seenIds)
     if scalar(storage.uniqueId) then seenIds["unique:" .. tostring(storage.uniqueId)] = true end
 end
 
-local function blockPlaceableStorage(snapshot, placeable, seen, seenIds, storedRealObjects)
+local function blockPlaceableStorage(placeable, seen, seenIds)
     local silo = placeable.spec_silo
     if type(silo) == "table" and type(silo.storages) == "table" then
         for _, storage in pairs(silo.storages) do rememberStorage(storage, seen, seenIds) end
@@ -70,13 +70,6 @@ local function blockPlaceableStorage(snapshot, placeable, seen, seenIds, storedR
     local production = placeable.spec_productionPoint
     if type(production) == "table" and type(production.productionPoint) == "table" then
         rememberStorage(production.productionPoint.storage, seen, seenIds)
-    end
-    local objectStorage = placeable.spec_objectStorage
-    if type(objectStorage) == "table" and type(objectStorage.storedObjects) == "table" then
-        for _, abstractObject in pairs(objectStorage.storedObjects) do
-            local real = call(snapshot, abstractObject, "getRealObject")
-            if type(real) == "table" then storedRealObjects[real] = true end
-        end
     end
 end
 
@@ -166,7 +159,7 @@ local function collectStorage(snapshot, context, storage, metadata, seen, seenId
     end
 end
 
-local function collectPlaceables(snapshot, context, seenStorage, seenStorageIds, storedRealObjects)
+local function collectPlaceables(snapshot, context, seenStorage, seenStorageIds)
     local mission = context.g_currentMission or {}
     local system = mission.placeableSystem
     local placeables = type(system) == "table" and system.placeables
@@ -187,7 +180,7 @@ local function collectPlaceables(snapshot, context, seenStorage, seenStorageIds,
             if type(placeable) == "table" and removing[placeable] == nil then
                 removing[placeable] = isRemoving(snapshot, placeable)
                 if removing[placeable] then
-                    blockPlaceableStorage(snapshot, placeable, seenStorage, seenStorageIds, storedRealObjects)
+                    blockPlaceableStorage(placeable, seenStorage, seenStorageIds)
                 end
             end
         end)
@@ -198,6 +191,8 @@ local function collectPlaceables(snapshot, context, seenStorage, seenStorageIds,
             if type(placeable) ~= "table" then error("Invalid inventory placeable record") end
             if seen[placeable] then return end
             seen[placeable] = true
+            if placeable.spec_silo == nil and placeable.spec_siloExtension == nil
+                and placeable.spec_productionPoint == nil then return end
             local id = "placeable:" .. objectId(placeable, key)
             if removing[placeable] then
                 snapshot.inventory.excludedCount = snapshot.inventory.excludedCount + 1
@@ -228,20 +223,9 @@ local function collectPlaceables(snapshot, context, seenStorage, seenStorageIds,
                     seenStorage, seenStorageIds)
             end
             local owner = call(snapshot, placeable, "getOwnerFarmId")
-            -- Skip real display objects from any virtual store; only the owned
-            -- store receives a user-facing omission finding below.
-            if type(placeable.spec_objectStorage) == "table" then
-                local objects = placeable.spec_objectStorage.storedObjects
-                if type(objects) == "table" then
-                    for _, abstractObject in pairs(objects) do
-                        local real = call(snapshot, abstractObject, "getRealObject")
-                        if type(real) == "table" then storedRealObjects[real] = true end
-                    end
-                end
-            end
-            if placeable.spec_productionPoint ~= nil or placeable.spec_objectStorage ~= nil then
+            if placeable.spec_productionPoint ~= nil then
                 if not finite(owner) then
-                    unknown(snapshot, "production", "INVENTORY_OWNER_UNAVAILABLE", id .. ": placeable owner unavailable; production/object storage omitted.")
+                    unknown(snapshot, "production", "INVENTORY_OWNER_UNAVAILABLE", id .. ": placeable owner unavailable; production storage omitted.")
                     return
                 end
             end
@@ -257,10 +241,6 @@ local function collectPlaceables(snapshot, context, seenStorage, seenStorageIds,
                         {id = id .. ":production", location = location, kind = "production", owner = owner,
                             source = "spec_productionPoint.productionPoint.storage"}, seenStorage, seenStorageIds)
                 end
-            end
-            if type(placeable.spec_objectStorage) == "table" then
-                snapshot.inventory.excludedCount = snapshot.inventory.excludedCount + 1
-                issue(snapshot, "INVENTORY_OBJECT_STORAGE_EXCLUDED", id .. ": stored bales and pallets are outside this build's quantity coverage.")
             end
         end)
     end
@@ -292,7 +272,60 @@ local function collectRegisteredStorage(snapshot, context, seen, seenIds)
     end
 end
 
-local function collectVehicles(snapshot, context, storedRealObjects)
+-- Native handlers can expose the same physical bale through a fill unit.
+-- Their exact proxy units are skipped; independent fuel/buffer/material stays.
+local function prepareBaleProxies(snapshot, context, blockedRealObjects, blockedUniqueIds)
+    local system = (context.g_currentMission or {}).vehicleSystem
+    local vehicles = type(system) == "table" and (system.vehicles or system.vehicleByUniqueId)
+    local skipped, seen, chamberGap = {}, {}, false
+    if type(vehicles) ~= "table" then return skipped end
+    for _, vehicle in pairs(vehicles) do
+        safely(snapshot, "bales", function()
+            if type(vehicle) ~= "table" then return end
+            if seen[vehicle] then return end
+            seen[vehicle] = true
+            local units = {}
+            local loader = vehicle.spec_baleLoader
+            if type(loader) == "table" and finite(loader.fillUnitIndex) then
+                units[loader.fillUnitIndex] = {kind = "baleCount"}
+            end
+            local blower = vehicle.spec_strawBlower
+            if type(blower) == "table" and blower.currentBale ~= nil and finite(blower.fillUnitIndex) then
+                units[blower.fillUnitIndex] = {kind = "baleProxy", bale = blower.currentBale}
+            end
+            local baler = vehicle.spec_baler
+            if type(baler) == "table" and baler.hasUnloadingAnimation == true then
+                local chamber, affectedFarm = false, false
+                if type(baler.bales) == "table" then
+                    for _, entry in pairs(baler.bales) do
+                        if type(entry) == "table" and type(entry.baleObject) == "table" then
+                            blockedRealObjects[entry.baleObject] = true
+                            local unique = call(snapshot, entry.baleObject, "getUniqueId")
+                            if not scalar(unique) then unique = entry.baleObject.uniqueId end
+                            if scalar(unique) then blockedUniqueIds[tostring(unique)] = true end
+                            local owner = call(snapshot, entry.baleObject, "getOwnerFarmId")
+                            if owner == snapshot.farm.id or not finite(owner) then affectedFarm = true end
+                            chamber = true
+                        end
+                    end
+                end
+                if finite(baler.lastBaleFillLevel) and baler.lastBaleFillLevel > 0 then chamber = true end
+                if chamber and (affectedFarm or call(snapshot, vehicle, "getOwnerFarmId") == snapshot.farm.id) then
+                    chamberGap = true
+                    unknown(snapshot, "bales", "INVENTORY_BALE_CHAMBER_TRANSITION",
+                        objectId(vehicle, "baler") .. ": bale chamber quantity is temporarily omitted; discharge the bale and Refresh.")
+                end
+                if chamber and finite(baler.fillUnitIndex) then
+                    units[baler.fillUnitIndex] = {kind = "chamberTransition"}
+                end
+            end
+            skipped[vehicle] = units
+        end)
+    end
+    return skipped, chamberGap
+end
+
+local function collectVehicles(snapshot, context, storedRealObjects, blockedUniqueIds, registeredBales, skippedBaleUnits)
     local section = snapshot.inventory
     local system = (context.g_currentMission or {}).vehicleSystem
     local vehicles = type(system) == "table" and system.vehicles
@@ -316,6 +349,7 @@ local function collectVehicles(snapshot, context, storedRealObjects)
             if seen[vehicle] or storedRealObjects[vehicle] then return end
             seen[vehicle] = true
             local uniqueId = scalar(vehicle.uniqueId) and tostring(vehicle.uniqueId) or nil
+            if uniqueId ~= nil and blockedUniqueIds[uniqueId] then return end
             if uniqueId ~= nil and seenIds[uniqueId] then return end
             if uniqueId ~= nil then seenIds[uniqueId] = true end
             if type(vehicle.getFillUnits) ~= "function" and vehicle.spec_fillUnit == nil then return end
@@ -354,6 +388,15 @@ local function collectVehicles(snapshot, context, storedRealObjects)
             for index, unit in pairs(units) do
                 safely(snapshot, "vehicle", function()
                     if type(unit) ~= "table" or not finite(index) or index < 1 or index ~= math.floor(index) then error(id .. ": invalid fill unit") end
+                    local skipped = skippedBaleUnits[vehicle] and skippedBaleUnits[vehicle][index]
+                    if skipped ~= nil then
+                        section.excludedCount = section.excludedCount + 1
+                        if skipped.kind == "baleProxy" and not registeredBales[skipped.bale] then
+                            unknown(snapshot, "vehicle", "INVENTORY_BALE_PROXY_UNAVAILABLE",
+                                id .. ": bale-handler quantity is omitted because its physical bale is absent from the item registry.")
+                        end
+                        return
+                    end
                     -- TreePlanter's getter proxies a separately registered pallet.
                     local treePlanter = vehicle.spec_treePlanter
                     if type(treePlanter) == "table" and treePlanter.mountedSaplingPallet ~= nil and treePlanter.fillUnitIndex == index then
@@ -383,18 +426,30 @@ function BankInventoryDataSource.collect(snapshot, context)
     snapshot.capabilities = snapshot.capabilities or {}
     snapshot.inventory = {items = {}, status = "unavailable", sourceCount = 0, unknownCount = 0,
         excludedCount = 0, zeroCount = 0, coverage = {storage = "unavailable", production = "unavailable",
-            vehicle = "unavailable", objectStorage = "excluded", bales = "excluded"}}
+            vehicle = "unavailable", objectStorage = "unavailable", bales = "unavailable"}}
     if type(snapshot.farm) ~= "table" or not finite(snapshot.farm.id) or snapshot.farm.id <= 0 then
         issue(snapshot, "INVENTORY_FARM_UNAVAILABLE", "Inventory cannot be attributed without an active farm.")
         return snapshot.inventory
     end
     local seenStorage, seenStorageIds, storedRealObjects = {}, {}, {}
-    collectPlaceables(snapshot, context, seenStorage, seenStorageIds, storedRealObjects)
+    local blockedUniqueIds, registeredBales = {}, {}
+    local skippedBaleUnits, chamberGap = prepareBaleProxies(snapshot, context, storedRealObjects, blockedUniqueIds)
+    local ok, failure = pcall(BankStoredObjectDataSource.collect, snapshot, context,
+        {addQuantity = addQuantity, unknown = unknown, call = call, issue = issue, isRemoving = isRemoving,
+            blockedUniqueIds = blockedUniqueIds, registeredBales = registeredBales}, storedRealObjects)
+    if not ok then
+        unknown(snapshot, "bales", "INVENTORY_STORED_OBJECT_ERROR", failure)
+        snapshot.inventory.coverage.objectStorage = "partial"
+    end
+    if chamberGap and snapshot.inventory.coverage.bales ~= "unavailable" then
+        snapshot.inventory.coverage.bales = "partial"
+    end
+    collectPlaceables(snapshot, context, seenStorage, seenStorageIds)
     collectRegisteredStorage(snapshot, context, seenStorage, seenStorageIds)
-    collectVehicles(snapshot, context, storedRealObjects)
-    for _, category in ipairs({"storage", "production", "vehicle"}) do
+    collectVehicles(snapshot, context, storedRealObjects, blockedUniqueIds, registeredBales, skippedBaleUnits)
+    for _, category in ipairs({"storage", "production", "vehicle", "bales", "objectStorage"}) do
         if snapshot.inventory.coverage[category] ~= "unavailable" then
-            -- Always partial overall: bales and virtual storage are not covered.
+            -- Ground heaps and unsupported stock still prevent full coverage.
             snapshot.inventory.status = "partial"
         end
     end

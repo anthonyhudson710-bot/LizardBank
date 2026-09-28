@@ -269,3 +269,24 @@ test("overflow across otherwise finite asset sections is unavailable", function(
     data.buildings = {status = "available", totalValue = 1e308, items = {}}
     assertContains(joined(BankReport.buildPages(data, i18n)), "including cash (partial): Unavailable")
 end)
+
+test("bale report preserves current contents, fermentation and unavailable virtual quantities", function()
+    local data = snapshot()
+    data.inventory = {status = "partial", sourceCount = 2, zeroCount = 0, unknownCount = 1,
+        excludedCount = 0, coverage = {bales = "available", objectStorage = "partial"}, items = {
+            {location = "bale:31", fillTypeTitle = "Grass", quantity = 4000, unit = "l", ownership = "owned",
+                kind = "bale", isFermenting = true, fermentationProgress = 0.25, objectCount = 1},
+            {location = "Pallet shed", objectName = "Seed pallet", fillTypeName = "Unknown fill type",
+                quantityStatus = "unavailable", ownership = "unknown", kind = "storedPallet", objectCount = 1}
+        }}
+    local report = joined(BankReport.buildPages(data, i18n))
+    assertContains(report, "Grass: 4000.0 L")
+    assertContains(report, "Fermenting: 25.0%")
+    assertContains(report, "Seed pallet: Unavailable")
+    assertContains(report, "Physical or stored objects in this entry: 1")
+    assertContains(report, "Physical bales: Checked | Bale/pallet stores: Partial")
+    assertContains(report, "including cash (partial): $350")
+    assertFalse(report:find("Silage", 1, true) ~= nil)
+    data.inventory.items[1].fermentationProgress = 1.5
+    assertContains(joined(BankReport.buildPages(data, i18n)), "Fermenting; progress unavailable")
+end)

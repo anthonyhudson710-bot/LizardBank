@@ -1,3 +1,4 @@
+dofile("scripts/BankStoredObjectDataSource.lua")
 dofile("scripts/BankInventoryDataSource.lua")
 
 local count = 0
@@ -19,7 +20,8 @@ end
 
 local function fixture()
     return {farm = {id = 7}, issues = {}, capabilities = {}}, {
-        g_currentMission = {placeableSystem = {placeables = {}}, storageSystem = {storages = {}}, vehicleSystem = {vehicles = {}}},
+        g_currentMission = {placeableSystem = {placeables = {}}, storageSystem = {storages = {}}, vehicleSystem = {vehicles = {}}, itemSystem = {items = {}}},
+        Bale = {},
         g_fillTypeManager = {getFillTypeByIndex = function(_, index)
             if index == 1 then return {name = "WHEAT", title = "Wheat"} end
             if index == 2 then return {name = "SEEDS", title = "Seeds"} end
@@ -195,8 +197,8 @@ test("missing farm, systems, and an empty supported inventory are distinguishabl
     equal(section.coverage.vehicle, "available")
     equal(section.sourceCount, 0)
     equal(section.unknownCount, 0)
-    equal(section.coverage.bales, "excluded")
-    equal(section.coverage.objectStorage, "excluded")
+    equal(section.coverage.bales, "available")
+    equal(section.coverage.objectStorage, "available")
     section = BankInventoryDataSource.collect(snapshot, {})
     equal(section.status, "unavailable")
     equal(section.coverage.vehicle, "unavailable")
@@ -207,7 +209,7 @@ test("missing farm, systems, and an empty supported inventory are distinguishabl
     assert(hasIssue(snapshot, "INVENTORY_FARM_UNAVAILABLE"))
 end)
 
-test("owned virtual storage is disclosed and its live display objects omitted", function()
+test("owned object storage counts the held pallet once at its storage location", function()
     local snapshot, context = fixture()
     local pallet = vehicle("storedPallet", {{fillLevel = 300, fillType = 1}})
     pallet.isPallet = true
@@ -216,9 +218,11 @@ test("owned virtual storage is disclosed and its live display objects omitted", 
     context.g_currentMission.placeableSystem.placeables = {barn}
     context.g_currentMission.vehicleSystem.vehicles = {pallet}
     local section = BankInventoryDataSource.collect(snapshot, context)
-    equal(#section.items, 0)
-    equal(section.excludedCount, 1)
-    assert(hasIssue(snapshot, "INVENTORY_OBJECT_STORAGE_EXCLUDED"))
+    equal(#section.items, 1)
+    equal(section.items[1].quantity, 300)
+    equal(section.items[1].kind, "storedPallet")
+    equal(section.items[1].location, "Bale and pallet barn")
+    equal(section.excludedCount, 0)
 end)
 
 test("unknown owners and property states never become attributed holdings", function()
@@ -271,6 +275,7 @@ test("removed placeable stores cannot reappear through registry or sibling alias
     liveAlias.spec_silo = {storages = {siloStorage}}
     local live = storage({[1] = 50})
     local accessorDeleted = placeable("method", "Method removed")
+    accessorDeleted.spec_silo = {storages = {}}
     accessorDeleted.getIsBeingDeleted = function() return true end
     -- No quantity or ownership accessor on removed sources should execute.
     for _, record in ipairs({silo, extension, production, accessorDeleted, siloStorage, extensionStorage, productionStorage}) do
@@ -334,6 +339,76 @@ test("deleted virtual store display objects never become loose inventory", funct
     equal(#section.items, 0)
     equal(section.sourceCount, 0)
     assert(hasIssue(snapshot, "INVENTORY_SOURCE_REMOVING"))
+end)
+
+local function bale(context, id, amount)
+    return {uniqueId = id, isa = function(_, class) return class == context.Bale end,
+        getOwnerFarmId = function() return 7 end,
+        getFillLevel = function() return amount end, getFillType = function() return 1 end}
+end
+
+test("bale loader counts and straw blower mirrors never duplicate physical bale quantities", function()
+    local snapshot, context = fixture()
+    local held = bale(context, "held", 4000)
+    local loader = vehicle("loader", {{fillLevel = 1, fillType = 1}, {fillLevel = 10, fillType = 2}})
+    loader.spec_baleLoader = {fillUnitIndex = 1}
+    local blower = vehicle("blower", {{fillLevel = 4000, fillType = 1}})
+    blower.spec_strawBlower = {fillUnitIndex = 1, currentBale = held}
+    context.g_currentMission.itemSystem.items = {held}
+    context.g_currentMission.vehicleSystem.vehicles = {loader, blower}
+    local section = BankInventoryDataSource.collect(snapshot, context)
+    equal(#section.items, 2)
+    local wheat, seeds = 0, 0
+    for _, item in ipairs(section.items) do
+        if item.fillTypeIndex == 1 then wheat = wheat + item.quantity else seeds = seeds + item.quantity end
+    end
+    equal(wheat, 4000)
+    equal(seeds, 10)
+    assert(not hasIssue(snapshot, "INVENTORY_BALE_PROXY_UNAVAILABLE"))
+    context.g_currentMission.itemSystem.items = {}
+    BankInventoryDataSource.collect(snapshot, context)
+    assert(hasIssue(snapshot, "INVENTORY_BALE_PROXY_UNAVAILABLE"))
+end)
+
+test("round baler transition is omitted while independent buffer and square-baler material remain", function()
+    local snapshot, context = fixture()
+    local chamber = bale(context, "chamber", 6000)
+    local chamberAlias = bale(context, "chamber", 6000)
+    local round = vehicle("round", {{fillLevel = 6000, fillType = 1}, {fillLevel = 70, fillType = 1}})
+    round.spec_baler = {fillUnitIndex = 1, hasUnloadingAnimation = true,
+        lastBaleFillLevel = 1800, bales = {{baleObject = chamber}}}
+    local dropped = bale(context, "square", 5000)
+    local square = vehicle("square-baler", {{fillLevel = 150, fillType = 1}})
+    square.spec_baler = {fillUnitIndex = 1, hasUnloadingAnimation = false, bales = {{baleObject = dropped}}}
+    context.g_currentMission.itemSystem.items = {chamber, chamberAlias, dropped}
+    context.g_currentMission.vehicleSystem.vehicles = {round, square}
+    local section = BankInventoryDataSource.collect(snapshot, context)
+    local sum = 0
+    for _, item in ipairs(section.items) do sum = sum + item.quantity end
+    equal(sum, 5220)
+    assert(hasIssue(snapshot, "INVENTORY_BALE_CHAMBER_TRANSITION"))
+    round.spec_baler.bales = {}
+    round.spec_baler.lastBaleFillLevel = nil
+    round.getFillUnitFillLevel = function(_, index) return index == 1 and 0 or 70 end
+    chamber.getFillLevel = function() return 1800 end
+    chamberAlias.getFillLevel = function() return 1800 end
+    section = BankInventoryDataSource.collect(snapshot, context)
+    sum = 0
+    for _, item in ipairs(section.items) do sum = sum + item.quantity end
+    equal(sum, 7020)
+end)
+
+test("an owned bale in a borrowed baler retains a visible chamber omission", function()
+    local snapshot, context = fixture()
+    local held = bale(context, "held", 6000)
+    local borrowed = vehicle("borrowed", {{fillLevel = 6000, fillType = 1}}, 13)
+    borrowed.spec_baler = {fillUnitIndex = 1, hasUnloadingAnimation = true, bales = {{baleObject = held}}}
+    context.g_currentMission.itemSystem.items = {held}
+    context.g_currentMission.vehicleSystem.vehicles = {borrowed}
+    local section = BankInventoryDataSource.collect(snapshot, context)
+    equal(#section.items, 0)
+    equal(section.coverage.bales, "partial")
+    assert(hasIssue(snapshot, "INVENTORY_BALE_CHAMBER_TRANSITION"))
 end)
 
 if _G.test == nil then print(string.format("%d inventory tests passed", count)) end

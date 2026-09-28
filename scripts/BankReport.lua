@@ -37,11 +37,21 @@ BankReport.ENGLISH = {
     lb_inventoryProduction = "Production storage",
     lb_inventoryVehicle = "Equipment fill unit",
     lb_inventoryPallet = "Pallet or big bag",
+    lb_inventoryBale = "Physical bale",
+    lb_inventoryStoredBale = "Bale in object storage",
+    lb_inventoryStoredPallet = "Pallet in object storage",
+    lb_inventoryStoredObject = "Stored object; contents not identified",
+    lb_inventoryObjectCount = "Physical or stored objects in this entry: %s",
+    lb_inventoryObjectCoverage = "Physical bales: %s | Bale/pallet stores: %s",
+    lb_coverageAvailable = "Checked",
+    lb_coveragePartial = "Partial",
+    lb_fermenting = "Fermenting: %s%%; quantity reflects current contents.",
+    lb_fermentingUnknown = "Fermenting; progress unavailable. Current contents are shown.",
     lb_inventoryUnavailable = "Stored-goods coverage is unavailable. Zero must not be assumed.",
     lb_inventoryNoItems = "No nonempty goods recorded in the containers checked; coverage is partial.",
     lb_inventoryBasis = "Quantities only; no separate inventory value is added to the asset subtotal.",
     lb_inventoryProvenance = "Container ownership does not prove cargo ownership, including contract crops.",
-    lb_inventoryMissing = "Bales, virtual bale/pallet storage and unsupported mod storage are omitted.",
+    lb_inventoryMissing = "Bunker/ground heaps, construction stock and unsupported mod storage are omitted.",
     lb_partialAssets = "Known covered assets, including cash (partial): %s",
     lb_area = "Known parcel area: %s",
     lb_landCount = "Owned parcels recorded: %s",
@@ -304,9 +314,13 @@ function BankReport.buildPages(snapshot, i18n, customEnvironment)
     section("lb_buildings", buildingLines)
 
     local inventoryKnown = inventory.status == "available" or inventory.status == "partial"
+    local coverageKeys = {available = "lb_coverageAvailable", partial = "lb_coveragePartial"}
+    local coverage = inventory.coverage or {}
     local inventoryLines = {
         t("lb_inventoryCounts", known(inventoryKnown and inventory.sourceCount or nil), known(inventoryKnown and inventory.zeroCount or nil)),
         t("lb_inventoryIssues", known(inventoryKnown and inventory.unknownCount or nil), known(inventoryKnown and inventory.excludedCount or nil)),
+        t("lb_inventoryObjectCoverage", t(coverageKeys[coverage.bales] or "lb_unavailable"),
+            t(coverageKeys[coverage.objectStorage] or "lb_unavailable")),
         t("lb_inventoryBasis"), t("lb_inventoryProvenance"), t("lb_inventoryMissing"), ""
     }
     local inventoryItems = inventory.items or {}
@@ -316,11 +330,28 @@ function BankReport.buildPages(snapshot, i18n, customEnvironment)
         inventoryLines[#inventoryLines + 1] = t("lb_inventoryNoItems")
     end
     local storageKeys = {storage = "lb_inventoryStorage", production = "lb_inventoryProduction",
-        vehicle = "lb_inventoryVehicle", pallet = "lb_inventoryPallet"}
+        vehicle = "lb_inventoryVehicle", pallet = "lb_inventoryPallet", bale = "lb_inventoryBale",
+        storedBale = "lb_inventoryStoredBale", storedPallet = "lb_inventoryStoredPallet", objectStorage = "lb_inventoryStoredObject"}
     for _, item in ipairs(inventoryItems) do
-        inventoryLines[#inventoryLines + 1] = t("lb_inventoryItem", known(item.fillTypeTitle or item.fillTypeName), quantity(item))
+        inventoryLines[#inventoryLines + 1] = t("lb_inventoryItem", known(item.fillTypeTitle or item.objectName or item.fillTypeName), quantity(item))
         inventoryLines[#inventoryLines + 1] = t("lb_inventoryLocation", known(item.location), t(ownershipKeys[item.ownership] or "lb_unknown"))
         inventoryLines[#inventoryLines + 1] = t("lb_inventoryKind", t(storageKeys[item.kind] or "lb_unavailable"))
+        if isNumber(item.objectCount) then
+            inventoryLines[#inventoryLines + 1] = t("lb_inventoryObjectCount", known(item.objectCount))
+        end
+        if item.isFermenting == true then
+            local progress = item.fermentationProgress
+            if isNumber(progress) and progress >= 0 and progress <= 1 then
+                local percent = string.format("%.1f", progress * 100)
+                if i18n ~= nil and type(i18n.formatNumber) == "function" then
+                    local ok, formatted = pcall(i18n.formatNumber, i18n, progress * 100, 1)
+                    if ok and type(formatted) == "string" then percent = formatted end
+                end
+                inventoryLines[#inventoryLines + 1] = t("lb_fermenting", percent)
+            else
+                inventoryLines[#inventoryLines + 1] = t("lb_fermentingUnknown")
+            end
+        end
         inventoryLines[#inventoryLines + 1] = ""
     end
     section("lb_inventory", inventoryLines)

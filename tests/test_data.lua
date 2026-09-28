@@ -1,5 +1,6 @@
 -- Run from the repository root: lua tests/test_data.lua
 dofile("scripts/BankPropertyDataSource.lua")
+dofile("scripts/BankStoredObjectDataSource.lua")
 dofile("scripts/BankInventoryDataSource.lua")
 dofile("scripts/BankDataSource.lua")
 
